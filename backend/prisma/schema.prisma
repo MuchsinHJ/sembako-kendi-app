@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// ENUM
+// ─────────────────────────────────────────
+
+enum ProductStatus {
+  AKTIF
+  NONAKTIF
+}
+
+enum PaymentStatus {
+  LUNAS
+  UTANG
+}
+
+enum TransactionStatus {
+  AKTIF
+  DIBATALKAN
+}
+
+// ─────────────────────────────────────────
+// MODEL
+// ─────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  nama         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions  Transaction[]
+  payments      PaymentHistory[]
+  refreshTokens RefreshToken[]
+  sessions      Session[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+// Tabel opsional — dipakai hanya jika AUTH_STRATEGY=session
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  nama        String
+  kategori    String
+  hargaJual   Decimal       @db.Decimal(12, 2)
+  hargaModal  Decimal       @db.Decimal(12, 2)
+  stok        Int           @default(0)
+  stokMinimum Int           @default(0)
+  status      ProductStatus @default(AKTIF)
+  fotoKey     String? // object key di Cloudflare R2, mis. "products/{id}/{uuid}.webp"
+  fotoUrl     String? // URL publik hasil upload, dikirim ke frontend
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  detailTransaksi DetailTransaction[]
+
+  @@index([status])
+  @@index([kategori])
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+  tanggal          DateTime          @default(now())
+  total            Decimal           @db.Decimal(12, 2)
+  statusPembayaran PaymentStatus
+  statusTransaksi  TransactionStatus @default(AKTIF)
+  namaPembeli      String?
+  noHpPembeli      String?
+  sisaSaldoUtang   Decimal?          @db.Decimal(12, 2)
+  dibuatOlehId     String
+  dibuatOleh       User              @relation(fields: [dibuatOlehId], references: [id])
+  dibatalkanPada   DateTime?
+  createdAt        DateTime          @default(now())
+
+  items    DetailTransaction[]
+  payments PaymentHistory[]
+
+  @@index([statusTransaksi])
+  @@index([statusPembayaran])
+  @@index([tanggal])
+}
+
+model DetailTransaction {
+  id                 String      @id @default(uuid())
+  transactionId      String
+  transaction        Transaction @relation(fields: [transactionId], references: [id])
+  productId          String
+  product            Product     @relation(fields: [productId], references: [id])
+  namaProdukSnapshot String
+  hargaJualSnapshot  Decimal     @db.Decimal(12, 2)
+  hargaModalSnapshot Decimal     @db.Decimal(12, 2)
+  jumlah             Int
+  subtotal           Decimal     @db.Decimal(12, 2)
+
+  @@index([transactionId])
+  @@index([productId])
+}
+
+model PaymentHistory {
+  id                String      @id @default(uuid())
+  transactionId     String
+  transaction       Transaction @relation(fields: [transactionId], references: [id])
+  tanggalBayar      DateTime    @default(now())
+  jumlahBayar       Decimal     @db.Decimal(12, 2)
+  saldoSetelahBayar Decimal     @db.Decimal(12, 2)
+  dicatatOlehId     String
+  dicatatOleh       User        @relation(fields: [dicatatOlehId], references: [id])
+
+  @@index([transactionId])
+}
+
