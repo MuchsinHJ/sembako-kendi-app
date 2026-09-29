@@ -6,23 +6,21 @@
  * Field sensitif di-redact agar tidak muncul di log.
  */
 
-import pino from 'pino';
-import { env } from './env.js';
-
-const isProduction = env.NODE_ENV === 'production';
+import pino from "pino";
+import { config } from "./env.js";
 
 export const logger = pino({
-  level: isProduction ? 'info' : 'debug',
+  level: config.IS_PRODUCTION ? "info" : "debug",
 
   // Pretty-print hanya di development (membutuhkan pino-pretty).
   // Di production, properti transport tidak dikirim sama sekali.
-  ...(!isProduction && {
+  ...(!config.IS_PRODUCTION && {
     transport: {
-      target: 'pino-pretty',
+      target: "pino-pretty",
       options: {
         colorize: true,
-        translateTime: 'HH:MM:ss',
-        ignore: 'pid,hostname',
+        translateTime: "HH:MM:ss",
+        ignore: "pid,hostname",
       },
     },
   }),
@@ -30,14 +28,14 @@ export const logger = pino({
   // Redact field sensitif, tidak pernah muncul di log mana pun
   redact: {
     paths: [
-      'req.headers.authorization',
-      'req.headers.cookie',
-      'body.password',
-      'body.passwordHash',
-      'body.tokenHash',
-      'r2AccessKeyId',
-      'r2SecretAccessKey',
+      "req.headers.authorization",
+      "req.headers.cookie",
+      "body.password",
+      "body.passwordHash",
+      "body.tokenHash",
+      "r2AccessKeyId",
+      "r2SecretAccessKey",
     ],
-    censor: '[REDACTED]',
+    censor: "[REDACTED]",
   },
 });

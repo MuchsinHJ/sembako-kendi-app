@@ -42,6 +42,7 @@ model User {
   payments      PaymentHistory[]
   refreshTokens RefreshToken[]
   sessions      Session[]
+  stockAdjustments StockAdjustment[]
 }
 
 model RefreshToken {
@@ -78,6 +79,7 @@ model Product {
   updatedAt   DateTime      @updatedAt
 
   detailTransaksi DetailTransaction[]
+  stockAdjustments StockAdjustment[]
 
   @@index([status])
   @@index([kategori])
@@ -134,3 +136,17 @@ model PaymentHistory {
   @@index([transactionId])
 }
 
+model StockAdjustment {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  delta         Int
+  alasan        String
+  stokSebelum   Int
+  stokSesudah   Int
+  dicatatOlehId String
+  dicatatOleh   User     @relation(fields: [dicatatOlehId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([productId])
+}

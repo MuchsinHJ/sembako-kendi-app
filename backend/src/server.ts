@@ -5,7 +5,7 @@
  */
 
 import app from './app.js';
-import { env } from './config/env.js';
+import { config } from './config/env.js';
 import { logger } from './config/logger.js';
 import { prisma } from './config/db.js';
 
@@ -35,10 +35,10 @@ process.on('uncaughtException', (err) => {
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 
-const server = app.listen(env.PORT, () => {
-  logger.info(`   Server berjalan di http://localhost:${env.PORT}`);
-  logger.info(`   Environment : ${env.NODE_ENV}`);
-  logger.info(`   Auth strategy: ${env.AUTH_STRATEGY}`);
+const server = app.listen(config.PORT, () => {
+  logger.info(`   Server berjalan di http://localhost:${config.PORT}`);
+  logger.info(`   Environment : ${config.NODE_ENV}`);
+  logger.info(`   Auth strategy: ${config.AUTH_STRATEGY}`);
 });
 
 export default server;

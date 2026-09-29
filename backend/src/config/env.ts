@@ -56,13 +56,13 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const data = parsed.data;
+const env = parsed.data;
 
 // Validasi lintas-field: JWT secrets wajib ada jika AUTH_STRATEGY=jwt
-if (data.AUTH_STRATEGY === 'jwt') {
+if (env.AUTH_STRATEGY === 'jwt') {
   const missing: string[] = [];
-  if (!data.JWT_ACCESS_SECRET) missing.push('JWT_ACCESS_SECRET');
-  if (!data.JWT_REFRESH_SECRET) missing.push('JWT_REFRESH_SECRET');
+  if (!env.JWT_ACCESS_SECRET) missing.push('JWT_ACCESS_SECRET');
+  if (!env.JWT_REFRESH_SECRET) missing.push('JWT_REFRESH_SECRET');
   if (missing.length > 0) {
     console.error(
       `\n❌ AUTH_STRATEGY=jwt membutuhkan: ${missing.join(', ')}\n`,
@@ -72,12 +72,31 @@ if (data.AUTH_STRATEGY === 'jwt') {
 }
 
 // Validasi lintas-field: SESSION_SECRET wajib ada jika AUTH_STRATEGY=session
-if (data.AUTH_STRATEGY === 'session' && !data.SESSION_SECRET) {
+if (env.AUTH_STRATEGY === 'session' && !env.SESSION_SECRET) {
   console.error('\n❌ AUTH_STRATEGY=session membutuhkan SESSION_SECRET\n');
   process.exit(1);
 }
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
-export const env = data;
-export type Env = typeof data;
+export const config = {
+  NODE_ENV: env.NODE_ENV,
+  PORT: env.PORT,
+  IS_PRODUCTION: env.NODE_ENV === "production",
+  DATABASE_URL: env.DATABASE_URL,
+  AUTH_STRATEGY: env.AUTH_STRATEGY,
+  JWT_ACCESS_SECRET: env.JWT_ACCESS_SECRET,
+  JWT_REFRESH_SECRET: env.JWT_REFRESH_SECRET,
+  JWT_ACCESS_EXPIRES_IN: env.JWT_ACCESS_EXPIRES_IN,
+  JWT_REFRESH_EXPIRES_IN: env.JWT_REFRESH_EXPIRES_IN,
+  SESSION_SECRET: env.SESSION_SECRET,
+  ALLOWED_ORIGINS: env.ALLOWED_ORIGINS,
+  MAX_UPLOAD_SIZE_BYTES: env.MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+  R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
+  R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
+  R2_BUCKET_NAME: env.R2_BUCKET_NAME,
+  R2_PUBLIC_URL: env.R2_PUBLIC_URL,
+} as const;
+
+export type Config = typeof config;

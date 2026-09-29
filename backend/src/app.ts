@@ -18,7 +18,7 @@ import pinoHttp from 'pino-http';
 // lives on `.default` — using the namespace directly has no call signatures.
 const createPinoHttp = pinoHttp.default ?? pinoHttp;
 
-import { env } from './config/env.js';
+import { config } from './config/env.js';
 import { logger } from './config/logger.js';
 
 // ─── Buat aplikasi Express ────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ const app = express();
 app.use(helmet());
 
 // ─── CORS — whitelist dari env ────────────────────────────────────────────────
-const allowedOrigins = env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
+const allowedOrigins = config.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
 
 app.use(
   cors({
@@ -79,7 +79,7 @@ app.get('/api/v1/health', (_req: Request, res: Response) => {
     success: true,
     data: {
       status: 'ok',
-      environment: env.NODE_ENV,
+      environment: config.NODE_ENV,
       timestamp: new Date().toISOString(),
     },
     message: "Kendi's Market API is running",
