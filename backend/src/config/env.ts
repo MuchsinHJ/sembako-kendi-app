@@ -30,6 +30,9 @@ const envSchema = z.object({
   // Session (opsional — hanya jika AUTH_STRATEGY=session)
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET minimal 16 karakter').optional(),
 
+  // Security
+  BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10, 'BCRYPT_SALT_ROUNDS minimal 10').default(10),
+
   // CORS
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
 
@@ -90,6 +93,7 @@ export const config = {
   JWT_ACCESS_EXPIRES_IN: env.JWT_ACCESS_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN: env.JWT_REFRESH_EXPIRES_IN,
   SESSION_SECRET: env.SESSION_SECRET,
+  BCRYPT_SALT_ROUNDS: env.BCRYPT_SALT_ROUNDS,
   ALLOWED_ORIGINS: env.ALLOWED_ORIGINS,
   MAX_UPLOAD_SIZE_BYTES: env.MAX_UPLOAD_SIZE_MB * 1024 * 1024,
   R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,

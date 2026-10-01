@@ -3,32 +3,38 @@
  * Konfigurasi Express application (tanpa `listen`).
  * Dipisah dari server.ts agar bisa diimpor langsung oleh Supertest saat API testing.
  *
- * Arsitektur layer (SDD §2.2):
- *   helmet → cors → rate-limit global → pino-http → body parsers
- *   → /api/v1 router (health + modul-modul lain)
- *   → 404 handler → global error handler
+ * Urutan middleware sesuai SDD §2.3:
+ *   rate-limit (global) → helmet → cors → compression → json → cookie-parser
+ *   → pino-http (request logger) → /api/v1 routes → 404 → errorHandler
  */
 
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
+import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
-// `pino-http` is CJS; under nodenext moduleResolution the callable factory
-// lives on `.default` — using the namespace directly has no call signatures.
-const createPinoHttp = pinoHttp.default ?? pinoHttp;
+// pino-http CJS/ESM: factory ada di `.default` di bawah nodenext moduleResolution
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createPinoHttp = (pinoHttp as any).default ?? pinoHttp;
 
 import { config } from './config/env.js';
 import { logger } from './config/logger.js';
+import { globalLimiter } from './middlewares/rateLimiter.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
 // ─── Buat aplikasi Express ────────────────────────────────────────────────────
 
 const app = express();
 
-// ─── Security headers (helmet) ───────────────────────────────────────────────
+// ─── 1. Rate limit global (SDD §6.6) ─────────────────────────────────────────
+// Dipasang paling awal agar menolak bot sebelum parsing body mahal.
+app.use(globalLimiter);
+
+// ─── 2. Security headers (SDD §6.7) ──────────────────────────────────────────
 app.use(helmet());
 
-// ─── CORS — whitelist dari env ────────────────────────────────────────────────
+// ─── 3. CORS — whitelist dari env (SDD §6.5) ─────────────────────────────────
 const allowedOrigins = config.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
 
 app.use(
@@ -38,40 +44,44 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
       cb(new Error(`CORS: origin "${origin}" tidak diizinkan`));
     },
-    credentials: true,
+    credentials: true, // diperlukan agar cookie refresh token bisa dikirim
   }),
 );
 
-// ─── Rate limit global (SDD §6.6) ────────────────────────────────────────────
-app.use(
-  rateLimit({
-    windowMs: 60 * 1000, // 1 menit
-    max: 100,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    message: {
-      success: false,
-      error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Terlalu banyak request. Coba lagi nanti.' },
-    },
-  }),
-);
+// ─── 4. Kompresi response (gzip/brotli) ──────────────────────────────────────
+app.use(compression());
 
-// ─── Request logging (pino-http) ──────────────────────────────────────────────
-app.use(
-  createPinoHttp({
-    logger,
-    // Jangan log request ke /health agar tidak bising
-    autoLogging: {
-      ignore: (req) => req.url === '/api/v1/health',
-    },
-  }),
-);
-
-// ─── Body parsers ─────────────────────────────────────────────────────────────
+// ─── 5. Body parsers ──────────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
+// ─── 6. Cookie parser (diperlukan untuk refresh token httpOnly cookie) ────────
+app.use(cookieParser());
+
+// ─── 7. Request logger (pino-http, dengan request ID) ────────────────────────
+app.use(
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+  createPinoHttp({
+    logger,
+    // Jangan log request ke /health agar tidak bising di monitoring
+    autoLogging: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ignore: (req: any) => (req.url as string) === '/api/v1/health',
+    },
+    // Tambahkan request ID ke setiap log line
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    genReqId: (req: any, res: any) => {
+      const existing = req.id as string | undefined;
+      if (existing) return existing;
+      const id = crypto.randomUUID();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      res.setHeader('X-Request-Id', id);
+      return id;
+    },
+  }),
+);
+
+// ─── 8. Routes ────────────────────────────────────────────────────────────────
 
 // Health check — tidak butuh auth, dipakai load balancer / uptime monitor
 app.get('/api/v1/health', (_req: Request, res: Response) => {
@@ -86,12 +96,26 @@ app.get('/api/v1/health', (_req: Request, res: Response) => {
   });
 });
 
-// TODO: mount modul-modul lain di sini
-// app.use('/api/v1/auth', authRouter);
-// app.use('/api/v1/products', productRouter);
-// ...
+// Auth routes (Fase 4)
+import authRouter from './modules/auth/auth.routes.js';
+app.use('/api/v1/auth', authRouter);
 
-// ─── 404 handler ─────────────────────────────────────────────────────────────
+// Product routes (Fase 5)
+import productRouter from './modules/product/product.routes.js';
+app.use('/api/v1/products', productRouter);
+
+
+// TODO (Fase 7): mount modul transaction
+// app.use('/api/v1/transactions', authenticate, transactionRouter);
+
+// TODO (Fase 8): mount modul debt
+// app.use('/api/v1/debts', authenticate, debtRouter);
+
+// TODO (Fase 9): mount modul dashboard & report
+// app.use('/api/v1/dashboard', authenticate, dashboardRouter);
+// app.use('/api/v1/reports', authenticate, reportRouter);
+
+// ─── 9. 404 handler ───────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
     success: false,
@@ -99,14 +123,10 @@ app.use((_req: Request, res: Response) => {
   });
 });
 
-// ─── Global error handler ─────────────────────────────────────────────────────
+// ─── 10. Global error handler (HARUS 4 parameter) ────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  logger.error({ err }, 'Unhandled error');
-  res.status(500).json({
-    success: false,
-    error: { code: 'INTERNAL_SERVER_ERROR', message: 'Terjadi kesalahan pada server.' },
-  });
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  errorHandler(err, req, res, next);
 });
 
 export default app;

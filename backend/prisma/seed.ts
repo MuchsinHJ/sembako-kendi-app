@@ -1,51 +1,43 @@
-import { PrismaClient } from '@prisma/client';
+/**
+ * prisma/seed.ts
+ * Script untuk seed data development/test.
+ * Run dengan: npm run seed
+ */
+
 import bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const passwordHash = await bcrypt.hash('admin123', 10);
-  
-  const user = await prisma.user.upsert({
-    where: { email: 'admin@kendismarket.com' },
-    update: {},
-    create: {
-      nama: 'Administrator',
-      email: 'admin@kendismarket.com',
+  console.log('🌱 Seeding database...');
+
+  // Hapus data lama (untuk development)
+  await prisma.refreshToken.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.user.deleteMany();
+
+  // Hash password dengan salt rounds dari env (default 10)
+  const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
+  const password = 'password123'; // Password default untuk testing
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+
+  // Seed users
+  const testUser = await prisma.user.create({
+    data: {
+      email: 'test@example.com',
+      nama: 'Test User',
       passwordHash,
     },
   });
 
-  console.log('Seed: User created', user.email);
-
-  const product1 = await prisma.product.create({
-    data: {
-      nama: 'Beras Pandan Wangi 5kg',
-      kategori: 'Sembako',
-      hargaJual: 75000,
-      hargaModal: 70000,
-      stok: 50,
-      stokMinimum: 10,
-    }
-  });
-
-  const product2 = await prisma.product.create({
-    data: {
-      nama: 'Minyak Goreng Bimoli 2L',
-      kategori: 'Sembako',
-      hargaJual: 35000,
-      hargaModal: 32000,
-      stok: 5, // low stock
-      stokMinimum: 10,
-    }
-  });
-
-  console.log('Seed: Products created', product1.nama, product2.nama);
+  console.log(`✅ Created user: ${testUser.email} (password: ${password})`);
+  console.log('🎉 Seeding complete!');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Seeding failed:', e);
     process.exit(1);
   })
   .finally(async () => {
