@@ -19,11 +19,9 @@ import type {
   UpdateStockThresholdInput,
   StockAdjustmentInput,
 } from './product.schema.js';
-import type { IObjectStorage } from './storage.interface.js';
-import { FakeObjectStorage } from './storage.interface.js';
+// Import real media service for photo deletion (Fase 6)
+import { deletePhotoOnProductDelete } from '../media/media.service.js';
 
-// Singleton fake storage untuk Fase 5
-const storage: IObjectStorage = new FakeObjectStorage();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,10 +194,8 @@ export const deleteProduct = async (id: string): Promise<void> => {
     );
   }
 
-  // Hapus foto di R2 jika ada (menggunakan fake storage di Fase 5)
-  if (product.fotoKey) {
-    await storage.deleteObject(product.fotoKey);
-  }
+  // Hapus foto di R2 jika ada (Fase 6: real implementation)
+  await deletePhotoOnProductDelete(product.fotoKey);
 
   // Hard delete
   await prisma.product.delete({

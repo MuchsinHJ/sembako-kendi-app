@@ -7,28 +7,37 @@
 
 export interface IObjectStorage {
   /**
-   * Upload object ke storage
-   * @returns object key yang berhasil di-upload
+   * Upload image ke storage
+   * @returns public URL dari file yang di-upload
    */
-  putObject(key: string, buffer: Buffer, contentType: string): Promise<string>;
+  uploadImage(key: string, buffer: Buffer, contentType: string): Promise<string>;
 
   /**
-   * Hapus object dari storage
+   * Hapus image dari storage
    */
-  deleteObject(key: string): Promise<void>;
+  deleteImage(key: string): Promise<void>;
+
+  /**
+   * Generate signed URL untuk akses file
+   */
+  getSignedUrl(key: string, expiresIn?: number): Promise<string>;
 }
 
 /**
- * Fake implementation untuk Fase 5
+ * Fake implementation untuk Fase 5 (tidak dipakai lagi di Fase 6)
  * Tidak melakukan operasi storage asli, hanya log
  */
 export class FakeObjectStorage implements IObjectStorage {
-  async putObject(key: string, _buffer: Buffer, _contentType: string): Promise<string> {
+  async uploadImage(key: string, _buffer: Buffer, _contentType: string): Promise<string> {
     console.log(`[FakeStorage] Would upload to key: ${key}`);
-    return key;
+    return `https://fake-cdn.com/${key}`;
   }
 
-  async deleteObject(key: string): Promise<void> {
+  async deleteImage(key: string): Promise<void> {
     console.log(`[FakeStorage] Would delete key: ${key}`);
+  }
+
+  async getSignedUrl(key: string, _expiresIn?: number): Promise<string> {
+    return `https://fake-cdn.com/${key}`;
   }
 }

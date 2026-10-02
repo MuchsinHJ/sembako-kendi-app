@@ -104,6 +104,10 @@ app.use('/api/v1/auth', authRouter);
 import productRouter from './modules/product/product.routes.js';
 app.use('/api/v1/products', productRouter);
 
+// Media routes (Fase 6 - upload foto produk)
+import mediaRouter from './modules/media/media.routes.js';
+app.use('/api/v1/products', mediaRouter); // mounted under /products/:id/photo
+
 
 // TODO (Fase 7): mount modul transaction
 // app.use('/api/v1/transactions', authenticate, transactionRouter);
