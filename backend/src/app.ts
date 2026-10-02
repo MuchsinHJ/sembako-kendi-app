@@ -108,9 +108,9 @@ app.use('/api/v1/products', productRouter);
 import mediaRouter from './modules/media/media.routes.js';
 app.use('/api/v1/products', mediaRouter); // mounted under /products/:id/photo
 
-
-// TODO (Fase 7): mount modul transaction
-// app.use('/api/v1/transactions', authenticate, transactionRouter);
+// Transaction routes (Fase 7)
+import transactionRouter from './modules/transaction/transaction.routes.js';
+app.use('/api/v1/transactions', transactionRouter);
 
 // TODO (Fase 8): mount modul debt
 // app.use('/api/v1/debts', authenticate, debtRouter);

@@ -1,0 +1,1129 @@
+{
+	"info": {
+		"_postman_id": "kendi-market-api-v1",
+		"name": "Kendi's Market API",
+		"description": "Complete API collection for Kendi's Market Backend - MVP Phase\n\nBase URL: {{base_url}}/api/v1\nAuthentication: Bearer Token (JWT)\n\nDerived from: SDD Backend Kendi's Market v1.0",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.accessToken) {",
+									"        pm.environment.set('access_token', jsonData.data.accessToken);",
+									"        console.log('Access token saved to environment');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login dengan email & password, mengembalikan access token + set refresh token cookie\n\nReferensi: FR-01, FR-02"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.accessToken) {",
+									"        pm.environment.set('access_token', jsonData.data.accessToken);",
+									"        console.log('Access token refreshed and saved');",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/refresh-token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"refresh-token"
+							]
+						},
+						"description": "Menghasilkan access token baru dari refresh token cookie\n\nReferensi: FR-01"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Meng-invalidasi refresh token/session (revoke)\n\nReferensi: FR-04"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints - Login, Refresh Token, Logout"
+		},
+		{
+			"name": "Product",
+			"item": [
+				{
+					"name": "Get All Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products?page=1&limit=20&kategori=&status=AKTIF&search=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Items per page"
+								},
+								{
+									"key": "kategori",
+									"value": "",
+									"description": "Filter by category"
+								},
+								{
+									"key": "status",
+									"value": "AKTIF",
+									"description": "AKTIF or NONAKTIF"
+								},
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search by product name"
+								}
+							]
+						},
+						"description": "List produk dengan filter kategori, status, dan pencarian nama\n\nReferensi: FR-06"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Detail satu produk\n\nReferensi: FR-06"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Product",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.environment.set('product_id', jsonData.data.id);",
+									"        console.log('Product ID saved:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nama\": \"Beras Premium 5kg\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": 75000,\n  \"hargaModal\": 65000,\n  \"stok\": 50,\n  \"stokMinimum\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							]
+						},
+						"description": "Tambah produk baru (tanpa foto; foto diunggah terpisah)\n\nValidasi:\n- hargaJual > 0 (BR-03)\n- stok >= 0 (BR-04)\n\nReferensi: FR-07, FR-08"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Product",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nama\": \"Beras Premium 5kg Updated\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": 77000,\n  \"hargaModal\": 67000,\n  \"stok\": 45,\n  \"stokMinimum\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Ubah data produk (tidak memengaruhi transaksi lama karena snapshot)\n\nReferensi: FR-09, FR-10, BR-10"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Product",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Hard delete jika belum ada riwayat transaksi (turut menghapus foto di R2)\nJika sudah ada transaksi, akan ditolak dengan error PRODUCT_HAS_TRANSACTION\n\nReferensi: FR-11, FR-12, BR-12"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Product Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"NONAKTIF\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id",
+								"status"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Mengubah status produk AKTIF/NONAKTIF (soft delete)\n\nReferensi: FR-12"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Stock Threshold",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"stokMinimum\": 15\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id/stock-threshold",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id",
+								"stock-threshold"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Mengatur ambang batas stok minimum\n\nReferensi: FR-13"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Low Stock Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/low-stock",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"low-stock"
+							]
+						},
+						"description": "Daftar produk dengan stok ≤ stokMinimum\n\nReferensi: FR-14, BR-15"
+					},
+					"response": []
+				},
+				{
+					"name": "Stock Adjustment",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"adjustment\": 10,\n  \"reason\": \"Stok opname - koreksi selisih fisik\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id/stock-adjustment",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id",
+								"stock-adjustment"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Penyesuaian stok manual dengan alasan (untuk audit)\nadjustment: positif untuk tambah, negatif untuk kurangi\n\nReferensi: BR-04, FR-15"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Product Photo",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "photo",
+									"type": "file",
+									"src": [],
+									"description": "Image file (JPEG/PNG/WebP, max 5MB)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id/photo",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id",
+								"photo"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Upload/ganti foto produk\nFile diproses: Multer → Sharp (resize/compress/convert to WebP) → Cloudflare R2\n\nValidasi:\n- Tipe file: image/jpeg, image/png, image/webp\n- Ukuran max: 5MB (default)\n\nReferensi: Perluasan FR-07/FR-09"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Product Photo",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/:id/photo",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								":id",
+								"photo"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{product_id}}",
+									"description": "Product UUID"
+								}
+							]
+						},
+						"description": "Menghapus foto produk (object di R2 + kosongkan fotoKey/fotoUrl)\n\nReferensi: Perluasan FR-09"
+					},
+					"response": []
+				}
+			],
+			"description": "Product management endpoints - CRUD, stock, photo upload"
+		},
+		{
+			"name": "Transaction",
+			"item": [
+				{
+					"name": "Get All Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/transactions?page=1&limit=20&statusTransaksi=AKTIF&statusPembayaran=&startDate=&endDate=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "statusTransaksi",
+									"value": "AKTIF",
+									"description": "AKTIF or DIBATALKAN"
+								},
+								{
+									"key": "statusPembayaran",
+									"value": "",
+									"description": "LUNAS or UTANG"
+								},
+								{
+									"key": "startDate",
+									"value": "",
+									"description": "ISO date format"
+								},
+								{
+									"key": "endDate",
+									"value": "",
+									"description": "ISO date format"
+								}
+							]
+						},
+						"description": "List riwayat transaksi dengan filter periode dan status\n\nReferensi: FR-24"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Transaction by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/transactions/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"transactions",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{transaction_id}}",
+									"description": "Transaction UUID"
+								}
+							]
+						},
+						"description": "Detail satu transaksi beserta item & riwayat pembayaran\n\nReferensi: FR-24"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Transaction (Lunas)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.environment.set('transaction_id', jsonData.data.id);",
+									"        console.log('Transaction ID saved:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"statusPembayaran\": \"LUNAS\",\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 2\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/transactions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"transactions"
+							]
+						},
+						"description": "Membuat transaksi LUNAS\n\nValidasi:\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- Otomatis menghitung total (BR-07)\n- Snapshot harga produk (BR-10)\n- Update stok (BR-09, BR-04)\n\nReferensi: FR-16–FR-23"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Transaction (Utang)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.id) {",
+									"        pm.environment.set('transaction_id', jsonData.data.id);",
+									"        console.log('Transaction ID saved:', jsonData.data.id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"statusPembayaran\": \"UTANG\",\n  \"namaPembeli\": \"Ibu Siti\",\n  \"noHpPembeli\": \"081234567890\",\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 3\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/transactions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"transactions"
+							]
+						},
+						"description": "Membuat transaksi UTANG\n\nValidasi:\n- namaPembeli & noHpPembeli wajib diisi (BR-08)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- sisaSaldoUtang = total\n\nReferensi: FR-16–FR-23, BR-08"
+					},
+					"response": []
+				},
+				{
+					"name": "Void Transaction",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/transactions/:id/void",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"transactions",
+								":id",
+								"void"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{transaction_id}}",
+									"description": "Transaction UUID"
+								}
+							]
+						},
+						"description": "Membatalkan transaksi dalam batas waktu yang ditentukan\n\nValidasi:\n- Hanya transaksi AKTIF yang bisa di-void\n- Dalam batas waktu yang ditentukan (BR-13)\n- Transaksi Utang hanya bisa di-void jika belum ada pembayaran\n- Stok dikembalikan (BR-09)\n\nReferensi: FR-25–FR-29, BR-13"
+					},
+					"response": []
+				}
+			],
+			"description": "Transaction management - Create (Lunas/Utang), View, Void"
+		},
+		{
+			"name": "Debt",
+			"item": [
+				{
+					"name": "Get All Debts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts?page=1&limit=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"debts"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						},
+						"description": "List transaksi berstatus UTANG dengan sisa saldo > 0\n\nReferensi: FR-37"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Debt Payment History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts/:transactionId/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"debts",
+								":transactionId",
+								"payments"
+							],
+							"variable": [
+								{
+									"key": "transactionId",
+									"value": "{{transaction_id}}",
+									"description": "Transaction UUID"
+								}
+							]
+						},
+						"description": "Riwayat cicilan/pembayaran satu transaksi utang\n\nReferensi: FR-31"
+					},
+					"response": []
+				},
+				{
+					"name": "Add Debt Payment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jumlahBayar\": 50000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/debts/:transactionId/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"debts",
+								":transactionId",
+								"payments"
+							],
+							"variable": [
+								{
+									"key": "transactionId",
+									"value": "{{transaction_id}}",
+									"description": "Transaction UUID"
+								}
+							]
+						},
+						"description": "Mencatat pembayaran cicilan (penuh/sebagian)\n\nValidasi:\n- jumlahBayar > 0\n- jumlahBayar <= sisaSaldoUtang (BR-14)\n- Update sisaSaldoUtang\n- Update statusPembayaran menjadi LUNAS jika saldo = 0\n\nReferensi: FR-30–FR-34, BR-14"
+					},
+					"response": []
+				}
+			],
+			"description": "Debt/Installment management - View debts, payment history, add payment"
+		},
+		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dashboard/summary",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dashboard",
+								"summary"
+							]
+						},
+						"description": "Ringkasan dashboard:\n- Omzet & profit periode berjalan\n- Produk low-stock count\n- Total saldo utang aktif\n\nReferensi: FR-43–FR-45"
+					},
+					"response": []
+				}
+			],
+			"description": "Dashboard summary endpoint"
+		},
+		{
+			"name": "Report",
+			"item": [
+				{
+					"name": "Get Sales Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/sales?startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"sales"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2024-01-01",
+									"description": "ISO date format (YYYY-MM-DD)"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31",
+									"description": "ISO date format (YYYY-MM-DD)"
+								}
+							]
+						},
+						"description": "Laporan omzet & profit per periode\n\nReferensi: FR-35, FR-36, FR-39"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Debt Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/debts?startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"debts"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2024-01-01",
+									"description": "ISO date format (YYYY-MM-DD)"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31",
+									"description": "ISO date format (YYYY-MM-DD)"
+								}
+							]
+						},
+						"description": "Laporan utang per periode\n\nReferensi: FR-37"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Product Trend Report",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/product-trend?startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"product-trend"
+							],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2024-01-01",
+									"description": "ISO date format (YYYY-MM-DD)"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31",
+									"description": "ISO date format (YYYY-MM-DD)"
+								}
+							]
+						},
+						"description": "Tren produk terlaris per periode\n\nReferensi: FR-38"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Sales Report (Excel)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/sales/export?format=xlsx&startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"sales",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "xlsx",
+									"description": "xlsx or pdf"
+								},
+								{
+									"key": "startDate",
+									"value": "2024-01-01"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31"
+								}
+							]
+						},
+						"description": "Ekspor laporan penjualan ke Excel\n\nReferensi: FR-40, FR-42"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Sales Report (PDF)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/sales/export?format=pdf&startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"sales",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "pdf",
+									"description": "xlsx or pdf"
+								},
+								{
+									"key": "startDate",
+									"value": "2024-01-01"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31"
+								}
+							]
+						},
+						"description": "Ekspor laporan penjualan ke PDF\n\nReferensi: FR-40, FR-42"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Debt Report (Excel)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/debts/export?format=xlsx&startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"debts",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "xlsx",
+									"description": "xlsx or pdf"
+								},
+								{
+									"key": "startDate",
+									"value": "2024-01-01"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31"
+								}
+							]
+						},
+						"description": "Ekspor laporan utang ke Excel\n\nReferensi: FR-41, FR-42"
+					},
+					"response": []
+				},
+				{
+					"name": "Export Debt Report (PDF)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/reports/debts/export?format=pdf&startDate=2024-01-01&endDate=2024-12-31",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"reports",
+								"debts",
+								"export"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "pdf",
+									"description": "xlsx or pdf"
+								},
+								{
+									"key": "startDate",
+									"value": "2024-01-01"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31"
+								}
+							]
+						},
+						"description": "Ekspor laporan utang ke PDF\n\nReferensi: FR-41, FR-42"
+					},
+					"response": []
+				}
+			],
+			"description": "Report endpoints - Sales, Debt, Product Trend, Export to Excel/PDF"
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
