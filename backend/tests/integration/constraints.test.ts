@@ -4,17 +4,26 @@ const prisma = new PrismaClient();
 
 describe('Database CHECK Constraints', () => {
   beforeAll(async () => {
-    // clean db before tests
+    // clean db before tests - delete in correct order to avoid FK violations
+    await prisma.paymentHistory.deleteMany();
     await prisma.detailTransaction.deleteMany();
     await prisma.transaction.deleteMany();
+    await prisma.stockAdjustment.deleteMany();
     await prisma.product.deleteMany();
+    await prisma.refreshToken.deleteMany();
+    await prisma.session.deleteMany();
     await prisma.user.deleteMany();
   });
 
   afterAll(async () => {
+    // Clean up in correct order to avoid FK violations
+    await prisma.paymentHistory.deleteMany();
     await prisma.detailTransaction.deleteMany();
     await prisma.transaction.deleteMany();
+    await prisma.stockAdjustment.deleteMany();
     await prisma.product.deleteMany();
+    await prisma.refreshToken.deleteMany();
+    await prisma.session.deleteMany();
     await prisma.user.deleteMany();
     await prisma.$disconnect();
   });

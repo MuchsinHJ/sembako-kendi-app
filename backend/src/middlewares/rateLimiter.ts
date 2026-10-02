@@ -65,9 +65,10 @@ export const uploadLimiter = rateLimit({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userId = (req as any).user?.id as string | undefined;
     if (userId) return userId;
-    // Normalize IPv6 (::ffff:x.x.x.x → x.x.x.x) agar tidak bypass limit
-    const ip = (req.ip ?? '::1').replace(/^::ffff:/, '');
-    return ip;
+    // Fallback to IP address with IPv6 normalization
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    // Normalize IPv6 loopback to IPv4 for consistency
+    return ip === '::1' ? '127.0.0.1' : ip;
   },
   message: rateLimitResponse(
     'RATE_LIMIT_EXCEEDED',

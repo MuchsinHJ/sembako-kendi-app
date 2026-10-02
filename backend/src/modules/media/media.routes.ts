@@ -21,8 +21,10 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Terlalu banyak upload. Coba lagi nanti.' } },
   keyGenerator: (req) => {
-    // Always return string, fallback to IP if user not authenticated
-    return req.user?.id || req.ip || 'anonymous';
+    // Use user ID if authenticated, otherwise use IP with IPv6 normalization
+    if (req.user?.id) return req.user.id;
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    return ip === '::1' ? '127.0.0.1' : ip;
   },
 });
 

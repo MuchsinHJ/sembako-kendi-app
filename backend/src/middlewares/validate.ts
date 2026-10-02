@@ -44,8 +44,18 @@ export const validate = (schemas: RequestSchemas) => {
         }
       } else {
         // Assign parsed (coerced/transformed) value kembali ke req
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (req as any)[part] = result.data;
+        // Note: req.query adalah getter-only, jadi perlu Object.defineProperty
+        if (part === 'query') {
+          Object.defineProperty(req, 'query', {
+            value: result.data,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (req as any)[part] = result.data;
+        }
       }
     }
 
