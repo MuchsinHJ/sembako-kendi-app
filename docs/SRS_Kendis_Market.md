@@ -175,7 +175,7 @@ Aturan berikut berlaku lintas fitur dan wajib ditegakkan oleh sistem di seluruh 
 | BR-05 | Jumlah produk pada transaksi harus > 0 dan tidak boleh melebihi stok yang tersedia saat transaksi dibuat. |
 | BR-06 | Satu transaksi dapat terdiri dari satu atau lebih produk. |
 | BR-07 | Total transaksi = jumlah dari (harga jual × jumlah) setiap item transaksi. |
-| BR-08 | Transaksi Utang wajib menyimpan nama dan nomor HP pembeli beserta sisa saldo yang belum dibayar. |
+| BR-08 | Transaksi Utang wajib menyimpan nama pembeli (nomor HP opsional) beserta sisa saldo yang belum dibayar. |
 | BR-09 | Stok berkurang segera setelah transaksi berhasil disimpan, untuk status Lunas maupun Utang. |
 | BR-10 | Perubahan harga produk tidak memengaruhi nilai historis pada transaksi yang sudah terjadi (snapshot harga per transaksi). |
 | BR-11 | Perhitungan profit = nilai penjualan − harga modal yang tercatat pada saat transaksi. |
@@ -242,7 +242,7 @@ Aturan berikut berlaku lintas fitur dan wajib ditegakkan oleh sistem di seluruh 
 | status_pembayaran | Enum (`lunas`, `utang`) | BR-08 |
 | status_transaksi | Enum (`aktif`, `dibatalkan`) | BR-13 |
 | nama_pembeli | String (nullable, wajib jika utang) | BR-08 |
-| no_hp_pembeli | String (nullable, wajib jika utang) | BR-08 |
+| no_hp_pembeli | String (nullable, opsional jika utang) | BR-08 |
 | sisa_saldo_utang | Decimal (nullable) | Diperbarui setiap pelunasan (BR-14) |
 | dibuat_oleh (user_id) | FK → User | Audit trail |
 | dibatalkan_pada | Timestamp (nullable) | Diisi saat void (BR-13) |
@@ -319,8 +319,8 @@ Then sistem menolak transaksi dan menampilkan pesan bahwa jumlah melebihi stok t
 
 **AC-05**
 Given pengguna memilih status pembayaran "Utang" pada form transaksi,
-When pengguna mencoba menyimpan transaksi tanpa mengisi nama dan nomor HP pembeli,
-Then sistem menolak penyimpanan dan menandai field nama/nomor HP sebagai wajib diisi. *(FR-21, BR-08)*
+When pengguna mencoba menyimpan transaksi tanpa mengisi nama pembeli,
+Then sistem menolak penyimpanan dan menandai field nama sebagai wajib diisi (nomor HP opsional). *(FR-21, BR-08)*
 
 **AC-06**
 Given transaksi berhasil disimpan dengan status Lunas,

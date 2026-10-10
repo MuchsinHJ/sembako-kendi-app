@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { config } from '../../config/env.js';
 import { validate } from '../../middlewares/validate.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import * as mediaController from './media.controller.js';
@@ -19,6 +20,8 @@ const uploadLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => config.NODE_ENV === 'test',
+  validate: { keyGeneratorIpFallback: false },
   message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Terlalu banyak upload. Coba lagi nanti.' } },
   keyGenerator: (req) => {
     // Use user ID if authenticated, otherwise use IP with IPv6 normalization

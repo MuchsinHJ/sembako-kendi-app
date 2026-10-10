@@ -65,11 +65,11 @@ Dokumen ini memetakan setiap Functional Requirement (FR), Business Rule (BR), da
 | BR-05 | Jumlah > 0 dan <= stok tersedia | Transaction | — | `transaction.schema.ts:25`, `transaction.service.ts:70` | `transaction.test.ts:78` |
 | BR-06 | Satu transaksi bisa multi-produk | Transaction | — | `transaction.schema.ts:18` | `transaction.test.ts:85` |
 | BR-07 | Total = SUM(harga jual × jumlah) | Transaction | — | `transaction.service.ts:88` | `transaction.test.ts:95` |
-| BR-08 | Transaksi Utang wajib simpan nama & HP | Transaction | — | `transaction.service.ts:108` | `transaction.test.ts:130` |
+| BR-08 | Transaksi Utang wajib simpan nama pembeli (HP opsional) | Transaction | — | `transaction.schema.ts`, `transaction.service.ts` | `transaction.test.ts` |
 | BR-09 | Stok berkurang segera (Lunas & Utang) | Transaction | — | `transaction.service.ts:145` | `transaction.test.ts:155` |
 | BR-10 | Snapshot harga tidak berubah | Transaction | — | `transaction.service.ts:122` | `transaction.test.ts:185` |
 | AC-04 | Transaksi ditolak jika stok tidak cukup | Transaction | — | `transaction.service.ts:72` | `transaction.test.ts:82` |
-| AC-05 | Utang tanpa nama/HP ditolak | Transaction | — | `transaction.service.ts:110` | `transaction.test.ts:135` |
+| AC-05 | Utang tanpa nama pembeli ditolak (HP opsional) | Transaction | — | `transaction.service.ts:110` | `transaction.test.ts:135` |
 | AC-06 | Stok berkurang & snapshot tersimpan | Transaction | — | `transaction.service.ts:142` | `transaction.test.ts:162` |
 
 ---
@@ -179,8 +179,8 @@ Dokumen ini memetakan setiap Functional Requirement (FR), Business Rule (BR), da
 ## 10. Test Coverage Summary
 
 **Total tests:** 145  
-**Passed:** 144 (99.3%)  
-**Failed:** 1 (isolated: auth refresh token cookie test — known issue, tidak menghalangi deployment)
+**Passed:** 145 (100%)  
+**Failed:** 0  
 
 **Coverage per layer:**
 - Service layer: **85%** (target >= 80% tercapai)

@@ -9,6 +9,22 @@ import { prisma } from '../../src/config/db.js';
 import { ValidationError, ProductHasTransactionError, BusinessRuleError } from '../../src/utils/errors.js';
 
 describe('Product Service', () => {
+  let testUser: { id: string; email: string; nama: string };
+
+  beforeAll(async () => {
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: 'product-test-user@example.com',
+          nama: 'Product Test User',
+          passwordHash: 'dummy_hash',
+        },
+      });
+    }
+    testUser = user;
+  });
+
   describe('createProduct', () => {
     it('BR-03: hargaJual harus > 0', async () => {
       const input = {
@@ -118,9 +134,8 @@ describe('Product Service', () => {
         },
       });
 
-      // Buat user untuk transaksi
-      const user = await prisma.user.findFirst();
-      if (!user) throw new Error('User tidak ditemukan untuk test');
+      // Gunakan test user untuk transaksi
+      const user = testUser;
 
       // Buat transaksi
       const transaction = await prisma.transaction.create({
@@ -186,8 +201,7 @@ describe('Product Service', () => {
         },
       });
 
-      const user = await prisma.user.findFirst();
-      if (!user) throw new Error('User tidak ditemukan untuk test');
+      const user = testUser;
 
       // Coba kurangi stok lebih dari yang ada
       const input = {
@@ -214,8 +228,7 @@ describe('Product Service', () => {
         },
       });
 
-      const user = await prisma.user.findFirst();
-      if (!user) throw new Error('User tidak ditemukan untuk test');
+      const user = testUser;
 
       const input = {
         delta: 20,

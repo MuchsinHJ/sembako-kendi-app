@@ -573,7 +573,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "transactions"]
             },
-            "description": "Membuat transaksi UTANG\n\nValidasi:\n- namaPembeli & noHpPembeli wajib diisi (BR-08)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- sisaSaldoUtang = total\n\nReferensi: FR-16–FR-23, BR-08"
+            "description": "Membuat transaksi UTANG\n\nValidasi:\n- namaPembeli wajib diisi, noHpPembeli opsional (BR-08)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- sisaSaldoUtang = total\n\nReferensi: FR-16–FR-23, BR-08"
           },
           "response": []
         },

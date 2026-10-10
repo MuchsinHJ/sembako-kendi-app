@@ -211,7 +211,7 @@ Collection ini sudah include request body yang sesuai dengan business rules:
 - **BR-03**: hargaJual > 0
 - **BR-04**: stok >= 0
 - **BR-05**: jumlah > 0, stok mencukupi
-- **BR-08**: namaPembeli & noHpPembeli wajib untuk transaksi Utang
+- **BR-08**: namaPembeli wajib untuk transaksi Utang (noHpPembeli opsional)
 - **BR-13**: Void dalam batas waktu
 - **BR-14**: jumlahBayar <= sisaSaldoUtang
 

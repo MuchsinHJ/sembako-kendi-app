@@ -13,7 +13,7 @@ export const createTransactionSchema = {
   body: z.object({
     statusPembayaran: z.nativeEnum(PaymentStatus),
     namaPembeli: z.string().min(1).max(255).optional(),
-    noHpPembeli: z.string().min(1).max(20).optional(),
+    noHpPembeli: z.string().max(20).optional().nullable(),
     items: z
       .array(
         z.object({
@@ -25,22 +25,17 @@ export const createTransactionSchema = {
   })
     .refine(
       (data) => {
-        // BR-08: Transaksi UTANG wajib memiliki namaPembeli dan noHpPembeli
+        // BR-08: Transaksi UTANG wajib memiliki namaPembeli (noHpPembeli opsional)
         if (data.statusPembayaran === 'UTANG') {
-          return (
-            data.namaPembeli &&
-            data.namaPembeli.trim().length > 0 &&
-            data.noHpPembeli &&
-            data.noHpPembeli.trim().length > 0
-          );
+          return !!data.namaPembeli && data.namaPembeli.trim().length > 0;
         }
         return true;
       },
       {
-        message: 'Nama pembeli dan nomor HP wajib diisi untuk transaksi UTANG',
-        path: ['namaPembeli'], // Error ditampilkan di field namaPembeli
+        message: 'Nama pembeli wajib diisi untuk transaksi UTANG',
+        path: ['namaPembeli'],
       },
-    ),
+    )
 };
 
 // ─── GET /transactions (list) ─────────────────────────────────────────────────

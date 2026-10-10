@@ -38,7 +38,10 @@ const generateAccessToken = (userId: string, email: string, nama: string): strin
   return jwt.sign(
     { userId, email, nama },
     config.JWT_ACCESS_SECRET as Secret,
-    { expiresIn: config.JWT_ACCESS_EXPIRES_IN } as jwt.SignOptions,
+    {
+      expiresIn: config.JWT_ACCESS_EXPIRES_IN,
+      jwtid: crypto.randomUUID(),
+    } as jwt.SignOptions,
   );
 };
 

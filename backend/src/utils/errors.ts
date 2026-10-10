@@ -84,10 +84,10 @@ export class StockExceededError extends BusinessRuleError {
   }
 }
 
-/** BR-08 / AC-05: Nama & nomor HP pembeli wajib untuk transaksi Utang */
+/** BR-08 / AC-05: Nama pembeli wajib untuk transaksi Utang (nomor HP opsional) */
 export class MissingDebtorInfoError extends BusinessRuleError {
   constructor(
-    message: string = 'Nama pembeli dan nomor HP wajib diisi untuk transaksi Utang.',
+    message: string = 'Nama pembeli wajib diisi untuk transaksi Utang.',
   ) {
     super(message);
   }

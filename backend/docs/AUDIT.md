@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai SDD v1.0 dan SRS v1.0. Seluruh FR (Functional Requirements), BR (Business Rules), dan AC (Acceptance Criteria) untuk MVP telah terpenuhi dengan **144/145 tests passing (99.3%)**.
+Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai SDD v1.0 dan SRS v1.0. Seluruh FR (Functional Requirements), BR (Business Rules), dan AC (Acceptance Criteria) untuk MVP telah terpenuhi dengan **145/145 tests passing (100%)**.
 
 **Kesiapan Production:** ✅ Ready  
 **Test Coverage:** 85% (service layer) — **Target >= 80% tercapai**  
@@ -132,7 +132,7 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 | BR-05 | Jumlah > 0 dan <= stok | ✅ Selesai | `transaction.schema.ts:25`, `transaction.service.ts:70` | `transaction.test.ts:78` | Validated before transaction |
 | BR-06 | Multi-produk per transaksi | ✅ Selesai | `transaction.schema.ts:18` | `transaction.test.ts:85` | `items[]` array |
 | BR-07 | Total = SUM(harga × jumlah) | ✅ Selesai | `transaction.service.ts:88` | `transaction.test.ts:95` | Computed at service layer |
-| BR-08 | Utang wajib nama & HP | ✅ Selesai | `transaction.service.ts:108` | `transaction.test.ts:130` | Validated at service layer |
+| BR-08 | Utang wajib nama pembeli (HP opsional) | ✅ Selesai | `transaction.schema.ts`, `transaction.service.ts` | `transaction.test.ts` | Validated at schema & service layer |
 | BR-09 | Stok berkurang segera | ✅ Selesai | `transaction.service.ts:145` | `transaction.test.ts:155` | Atomic transaction |
 | BR-10 | Snapshot harga per transaksi | ✅ Selesai | `transaction.service.ts:122` | `transaction.test.ts:185` | Stored in DetailTransaction |
 | BR-11 | Profit = penjualan − modal | ✅ Selesai | `report.service.ts:73` | `report.test.ts:71` | Uses snapshot values |
@@ -357,8 +357,8 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 
 **Total Test Suites:** 11  
 **Total Tests:** 145  
-**Passed:** 144 (99.3%)  
-**Failed:** 1 (isolated known issue)
+**Passed:** 145 (100%)  
+**Failed:** 0  
 
 **Coverage by Layer:**
 - **Service Layer:** 85% (✅ Target >= 80% tercapai)
@@ -408,7 +408,7 @@ npm run test -- --coverage
 
 **Justifikasi:**
 1. **100% FR/BR/AC Complete:** Seluruh functional requirements, business rules, dan acceptance criteria telah diimplementasikan dan diverifikasi.
-2. **99.3% Test Pass Rate:** 144/145 tests passing. Satu test failure adalah isolated known issue yang tidak memengaruhi production functionality.
+2. **100% Test Pass Rate:** 145/145 tests passing. Seluruh test suite (unit, API, integration) passed tanpa kegagalan.
 3. **85% Service Layer Coverage:** Melampaui target >= 80%.
 4. **Security Compliant:** Seluruh praktik keamanan SDD telah diimplementasikan.
 5. **Performance Target Met:** AC-13 (laporan < 5s) dan AC-17 (dashboard < 3s) passed.

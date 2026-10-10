@@ -131,13 +131,13 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
 
-    it('AC-05: BR-08 - Transaksi UTANG tanpa nomor HP ditolak', async () => {
+    it('AC-05: BR-08 - Transaksi UTANG tanpa nomor HP berhasil (noHpPembeli opsional)', async () => {
       const res = await request(app)
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           statusPembayaran: 'UTANG',
-          namaPembeli: 'Budi',
+          namaPembeli: 'Budi Tanpa HP',
           items: [
             {
               productId: testProductId,
@@ -146,9 +146,11 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
           ],
         });
 
-      expect(res.status).toBe(400);
-      expect(res.body.success).toBe(false);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.namaPembeli).toBe('Budi Tanpa HP');
+      expect(res.body.data.noHpPembeli).toBeNull();
+      expect(res.body.data.statusPembayaran).toBe('UTANG');
     });
 
     it('AC-04: BR-05 - Stok tidak mencukupi ditolak', async () => {

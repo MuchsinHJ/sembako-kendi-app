@@ -131,7 +131,7 @@
 | BR-05 | Jumlah produk pada transaksi harus lebih besar dari 0 dan tidak boleh melebihi stok yang tersedia. |
 | BR-06 | Satu transaksi dapat berisi satu atau lebih produk. |
 | BR-07 | Total transaksi merupakan penjumlahan harga jual dikalikan jumlah setiap item transaksi. |
-| BR-08 | Transaksi berstatus Lunas dianggap selesai dibayar. Transaksi berstatus Utang harus menyimpan nama dan nomor HP pembeli agar dapat ditelusuri, beserta saldo yang belum dibayar. |
+| BR-08 | Transaksi berstatus Lunas dianggap selesai dibayar. Transaksi berstatus Utang harus menyimpan nama pembeli (nomor HP opsional) agar dapat ditelusuri, beserta saldo yang belum dibayar. |
 | BR-09 | Stok berkurang ketika transaksi berhasil disimpan, baik transaksi Lunas maupun Utang. |
 | BR-10 | Perubahan harga produk tidak boleh mengubah nilai historis pada transaksi yang sudah terjadi; harga pada saat transaksi perlu tersimpan pada detail transaksi. |
 | BR-11 | Perhitungan profit menggunakan nilai penjualan dikurangi harga modal yang tercatat pada saat transaksi. |

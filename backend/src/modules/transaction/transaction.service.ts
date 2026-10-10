@@ -3,7 +3,7 @@
  * Business logic untuk transaksi penjualan.
  * BR-05: Stok tidak boleh negatif saat transaksi
  * BR-07: Total dihitung dengan Decimal untuk precision
- * BR-08: UTANG wajib nama + noHP pembeli
+ * BR-08: UTANG wajib nama pembeli (noHpPembeli opsional)
  * BR-13: Void hanya dalam window waktu yang ditentukan (default: hari yang sama)
  */
 
@@ -86,11 +86,11 @@ export const createTransaction = async (
     throw new ValidationError('Transaksi harus memiliki minimal 1 item');
   }
 
-  // BR-08: Validasi UTANG wajib nama + noHP (sudah di-handle Zod refine, tapi double-check di service)
+  // BR-08: Validasi UTANG wajib nama pembeli (noHpPembeli opsional)
   if (input.statusPembayaran === PaymentStatus.UTANG) {
-    if (!input.namaPembeli?.trim() || !input.noHpPembeli?.trim()) {
+    if (!input.namaPembeli?.trim()) {
       throw new ValidationError(
-        'Nama pembeli dan nomor HP wajib diisi untuk transaksi UTANG',
+        'Nama pembeli wajib diisi untuk transaksi UTANG',
       );
     }
   }

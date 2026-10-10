@@ -413,7 +413,7 @@ model PaymentHistory {
 | `stok >= 0` | Aplikasi (Zod/service) + `CHECK` constraint DB | BR-04 |
 | `jumlah > 0` pada `DetailTransaction` | Aplikasi (Zod) + `CHECK` constraint DB | BR-05 |
 | `email` unik pada `User` | `@unique` Prisma | FR-01 |
-| `namaPembeli`/`noHpPembeli` wajib jika `statusPembayaran = UTANG` | Validasi service layer (tidak feasible sebagai DB constraint sederhana) | BR-08 |
+| `namaPembeli` wajib jika `statusPembayaran = UTANG` (`noHpPembeli` opsional) | Validasi service layer (tidak feasible sebagai DB constraint sederhana) | BR-08 |
 | `jumlahBayar <= sisaSaldoUtang` saat insert | Validasi service layer dalam DB transaction | BR-14 |
 | Produk dengan `DetailTransaction` terkait tidak dapat di-`DELETE`, hanya `UPDATE status = NONAKTIF` | Service layer (cek relasi sebelum delete) | BR-12 |
 | Tipe file foto produk harus salah satu dari `jpeg/png/webp` | Multer `fileFilter` + validasi ulang di `media.service` | Perluasan FR-07/FR-09 |

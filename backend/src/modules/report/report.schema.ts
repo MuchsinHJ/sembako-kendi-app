@@ -13,12 +13,19 @@ import { z } from "zod";
  */
 export const reportQuerySchema = z
   .object({
-    start: z.string().datetime({ message: "Format start harus ISO 8601" }),
-    end: z.string().datetime({ message: "Format end harus ISO 8601" }),
+    // Menerima baik format tanggal saja "2026-10-01" maupun "2026-10-01T00:00:00Z"
+    startDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
+      message:
+        "Format startDate harus berupa tanggal yang valid (mis. YYYY-MM-DD atau ISO 8601)",
+    }),
+    endDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
+      message:
+        "Format endDate harus berupa tanggal yang valid (mis. YYYY-MM-DD atau ISO 8601)",
+    }),
   })
-  .refine((data) => new Date(data.start) <= new Date(data.end), {
-    message: "start harus sebelum atau sama dengan end",
-    path: ["start"],
+  .refine((data) => new Date(data.startDate) <= new Date(data.endDate), {
+    message: "startDate harus sebelum atau sama dengan endDate",
+    path: ["startDate"],
   });
 
 export type ReportQuery = z.infer<typeof reportQuerySchema>;

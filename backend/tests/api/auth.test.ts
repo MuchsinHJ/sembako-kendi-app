@@ -171,8 +171,16 @@ describe('Auth Endpoints (JWT Strategy)', () => {
       expect(refreshRes.body.success).toBe(true);
       expect(refreshRes.body.data.accessToken).toBeDefined();
       
-      // Token baru harus berbeda (rotasi)
+      // Token baru harus berbeda (rotasi accessToken via unique jwtid)
       expect(refreshRes.body.data.accessToken).not.toBe(loginRes.body.data.accessToken);
+
+      // Refresh token cookie baru juga harus ada dan berbeda (rotasi refreshToken cookie)
+      const newSetCookieHeader = refreshRes.get('set-cookie');
+      expect(newSetCookieHeader).toBeDefined();
+      const newCookies = Array.isArray(newSetCookieHeader) ? newSetCookieHeader : [newSetCookieHeader];
+      const newRefreshCookie = newCookies.find((c: string) => c.startsWith('refreshToken='));
+      expect(newRefreshCookie).toBeDefined();
+      expect(newRefreshCookie).not.toBe(refreshCookie);
     });
 
     it('refresh gagal → 401 tanpa cookie', async () => {

@@ -27,6 +27,7 @@ export const globalLimiter = rateLimit({
     'RATE_LIMIT_EXCEEDED',
     'Terlalu banyak request. Coba lagi nanti.',
   ),
+  skip: () => config.NODE_ENV === 'test',
 });
 
 // ─── Login (5 req/min/IP, anti brute-force) ──────────────────────────────────
@@ -55,6 +56,7 @@ export const uploadLimiter = rateLimit({
   max: 10,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
+  skip: () => config.NODE_ENV === 'test',
   // Key berdasarkan user ID (jika tersedia) atau IP.
   // Jika user ID tidak tersedia (auth belum Fase 4), fallback ke IP.
   // ipKeyGenerator tidak dipakai di sini karena req.user tersedia di Fase 4+
@@ -75,5 +77,5 @@ export const uploadLimiter = rateLimit({
     'Terlalu banyak upload. Coba lagi setelah 1 menit.',
   ),
   // Suppress ERR_ERL_KEY_GEN_IPV6 warning karena kita sudah normalize IPv6 di atas
-  validate: { xForwardedForHeader: false },
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
 });

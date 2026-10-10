@@ -72,8 +72,8 @@ interface ProductTrendData {
 export async function getSalesReport(
   query: ReportQuery,
 ): Promise<SalesReportData> {
-  const start = new Date(query.start);
-  const end = new Date(query.end);
+  const start = new Date(query.startDate);
+  const end = new Date(query.endDate);
 
   // Fetch transaksi aktif dalam periode
   const transactionsRaw = await prisma.transaction.findMany({
@@ -136,8 +136,8 @@ export async function getSalesReport(
 
   return {
     periode: {
-      start: query.start,
-      end: query.end,
+      start: query.startDate,
+      end: query.endDate,
     },
     omzet,
     profit,
@@ -154,8 +154,8 @@ export async function getSalesReport(
 export async function getDebtsReport(
   query: ReportQuery,
 ): Promise<DebtReportData> {
-  const start = new Date(query.start);
-  const end = new Date(query.end);
+  const start = new Date(query.startDate);
+  const end = new Date(query.endDate);
 
   // Fetch transaksi utang dalam periode (dengan sisa saldo > 0)
   const debts = await prisma.transaction.findMany({
@@ -214,8 +214,8 @@ export async function getDebtsReport(
 
   return {
     periode: {
-      start: query.start,
-      end: query.end,
+      start: query.startDate,
+      end: query.endDate,
     },
     totalSaldoUtang,
     debtCount: debts.length,
@@ -232,8 +232,8 @@ export async function getDebtsReport(
 export async function getProductTrend(
   query: ReportQuery,
 ): Promise<ProductTrendData> {
-  const start = new Date(query.start);
-  const end = new Date(query.end);
+  const start = new Date(query.startDate);
+  const end = new Date(query.endDate);
 
   // Aggregate per produk: SUM(jumlah), SUM(subtotal)
   // Menggunakan groupBy Prisma
@@ -296,8 +296,8 @@ export async function getProductTrend(
 
   return {
     periode: {
-      start: query.start,
-      end: query.end,
+      start: query.startDate,
+      end: query.endDate,
     },
     topProducts,
   };

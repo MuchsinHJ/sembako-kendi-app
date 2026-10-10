@@ -85,8 +85,8 @@ export const exportSales = asyncHandler(
     const query = req.query as ExportQuery;
     const data = await getSalesReport(query);
 
-    const startDate = format(new Date(query.start), "yyyyMMdd");
-    const endDate = format(new Date(query.end), "yyyyMMdd");
+    const startDate = format(new Date(query.startDate), "yyyyMMdd");
+    const endDate = format(new Date(query.endDate), "yyyyMMdd");
     const filename = `laporan-penjualan_${startDate}_${endDate}`;
 
     if (query.format === "xlsx") {
@@ -123,8 +123,8 @@ export const exportDebts = asyncHandler(
     const query = req.query as ExportQuery;
     const data = await getDebtsReport(query);
 
-    const startDate = format(new Date(query.start), "yyyyMMdd");
-    const endDate = format(new Date(query.end), "yyyyMMdd");
+    const startDate = format(new Date(query.startDate), "yyyyMMdd");
+    const endDate = format(new Date(query.endDate), "yyyyMMdd");
     const filename = `laporan-utang_${startDate}_${endDate}`;
 
     if (query.format === "xlsx") {

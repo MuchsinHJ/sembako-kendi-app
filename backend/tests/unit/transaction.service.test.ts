@@ -3,7 +3,7 @@
  * Unit tests untuk transaction.service (AC-04, AC-05, AC-06, AC-07, AC-08)
  * BR-05: Stok tidak boleh negatif
  * BR-07: Total dihitung dengan Decimal
- * BR-08: UTANG wajib nama + noHP
+ * BR-08: UTANG wajib nama pembeli (noHpPembeli opsional)
  * BR-13: Void window validation
  */
 
@@ -116,10 +116,10 @@ describe('Transaction Service', () => {
       ).rejects.toThrow(ValidationError);
     });
 
-    it('AC-05: BR-08 - UTANG tanpa nomor HP harus ditolak', async () => {
+    it('AC-05: BR-08 - UTANG tanpa nomor HP berhasil (noHpPembeli opsional)', async () => {
       const input = {
         statusPembayaran: PaymentStatus.UTANG,
-        namaPembeli: 'Budi',
+        namaPembeli: 'Budi Tanpa HP',
         items: [
           {
             productId: testProductId,
@@ -128,9 +128,11 @@ describe('Transaction Service', () => {
         ],
       };
 
-      await expect(
-        transactionService.createTransaction(input, testUserId),
-      ).rejects.toThrow(ValidationError);
+      const result = await transactionService.createTransaction(input, testUserId);
+      expect(result.id).toBeDefined();
+      expect(result.namaPembeli).toBe('Budi Tanpa HP');
+      expect(result.noHpPembeli).toBeNull();
+      expect(result.statusPembayaran).toBe(PaymentStatus.UTANG);
     });
 
     it('Transaksi LUNAS berhasil tanpa nama/nomor HP', async () => {
