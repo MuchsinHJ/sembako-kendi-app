@@ -1,0 +1,152 @@
+/**
+ * report.controller.ts
+ * HTTP handlers untuk endpoint report & export (Fase 9).
+ *
+ * Referensi: SDD §3.10, §5.8
+ */
+
+import type { Request, Response, NextFunction } from "express";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import type { ReportQuery, ExportQuery } from "./report.schema.js";
+import {
+  getSalesReport,
+  getDebtsReport,
+  getProductTrend as getProductTrendService,
+} from "./report.service.js";
+import {
+  exportSalesToExcel,
+  exportSalesToPDF,
+  exportDebtsToExcel,
+  exportDebtsToPDF,
+} from "./export.service.js";
+import { format } from "date-fns";
+
+/**
+ * GET /reports/sales
+ * Laporan penjualan (omzet, profit, daftar transaksi).
+ * Referensi: FR-35, FR-36, FR-39, AC-13.
+ */
+export const getSales = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const query = req.query as ReportQuery;
+    const data = await getSalesReport(query);
+
+    res.json({
+      success: true,
+      data,
+      message: "Laporan penjualan berhasil dimuat",
+    });
+  },
+);
+
+/**
+ * GET /reports/debts
+ * Laporan utang (daftar utang dengan riwayat cicilan).
+ * Referensi: FR-37, AC-14.
+ */
+export const getDebts = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const query = req.query as ReportQuery;
+    const data = await getDebtsReport(query);
+
+    res.json({
+      success: true,
+      data,
+      message: "Laporan utang berhasil dimuat",
+    });
+  },
+);
+
+/**
+ * GET /reports/product-trend
+ * Tren produk terlaris (minimal 5 produk).
+ * Referensi: FR-38, AC-16.
+ */
+export const getProductTrend = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const query = req.query as ReportQuery;
+    const data = await getProductTrendService(query);
+
+    res.json({
+      success: true,
+      data,
+      message: "Tren produk berhasil dimuat",
+    });
+  },
+);
+
+/**
+ * GET /reports/sales/export
+ * Ekspor laporan penjualan ke Excel atau PDF.
+ * Referensi: FR-40, FR-42, IR-07–IR-09.
+ */
+export const exportSales = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const query = req.query as ExportQuery;
+    const data = await getSalesReport(query);
+
+    const startDate = format(new Date(query.start), "yyyyMMdd");
+    const endDate = format(new Date(query.end), "yyyyMMdd");
+    const filename = `laporan-penjualan_${startDate}_${endDate}`;
+
+    if (query.format === "xlsx") {
+      const buffer = await exportSalesToExcel(data);
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}.xlsx"`,
+      );
+      res.send(buffer);
+    } else {
+      // PDF
+      const stream = exportSalesToPDF(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}.pdf"`,
+      );
+      stream.pipe(res);
+    }
+  },
+);
+
+/**
+ * GET /reports/debts/export
+ * Ekspor laporan utang ke Excel atau PDF.
+ * Referensi: FR-41, FR-42, IR-07–IR-09.
+ */
+export const exportDebts = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const query = req.query as ExportQuery;
+    const data = await getDebtsReport(query);
+
+    const startDate = format(new Date(query.start), "yyyyMMdd");
+    const endDate = format(new Date(query.end), "yyyyMMdd");
+    const filename = `laporan-utang_${startDate}_${endDate}`;
+
+    if (query.format === "xlsx") {
+      const buffer = await exportDebtsToExcel(data);
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}.xlsx"`,
+      );
+      res.send(buffer);
+    } else {
+      // PDF
+      const stream = exportDebtsToPDF(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}.pdf"`,
+      );
+      stream.pipe(res);
+    }
+  },
+);

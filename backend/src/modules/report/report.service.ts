@@ -1,0 +1,304 @@
+/**
+ * report.service.ts
+ * Business logic untuk laporan & tren produk (Fase 9).
+ *
+ * Referensi: SDD §3.10; SRS FR-35–FR-42, BR-11, BR-16, AC-13–AC-16
+ */
+
+import { prisma } from "../../config/db.js";
+import type { ReportQuery } from "./report.schema.js";
+import { Prisma } from "@prisma/client";
+
+interface SalesReportData {
+  periode: {
+    start: string;
+    end: string;
+  };
+  omzet: number;
+  profit: number;
+  transactionCount: number;
+  transactions: Array<{
+    id: string;
+    tanggal: Date;
+    total: number;
+    statusPembayaran: string;
+    namaPembeli: string | null;
+  }>;
+}
+
+interface DebtReportData {
+  periode: {
+    start: string;
+    end: string;
+  };
+  totalSaldoUtang: number;
+  debtCount: number;
+  debts: Array<{
+    id: string;
+    tanggal: Date;
+    total: number;
+    namaPembeli: string;
+    noHpPembeli: string | null;
+    sisaSaldoUtang: number;
+    payments: Array<{
+      id: string;
+      tanggalBayar: Date;
+      jumlahBayar: number;
+      saldoSetelahBayar: number;
+    }>;
+  }>;
+}
+
+interface ProductTrendData {
+  periode: {
+    start: string;
+    end: string;
+  };
+  topProducts: Array<{
+    productId: string;
+    namaProduk: string;
+    kategori: string;
+    totalQuantitySold: number;
+    totalRevenue: number;
+  }>;
+}
+
+/**
+ * Laporan penjualan: omzet, profit, dan daftar transaksi.
+ * Hanya transaksi AKTIF (bukan DIBATALKAN).
+ *
+ * Referensi: FR-35, FR-36, FR-39, AC-13.
+ */
+export async function getSalesReport(
+  query: ReportQuery,
+): Promise<SalesReportData> {
+  const start = new Date(query.start);
+  const end = new Date(query.end);
+
+  // Fetch transaksi aktif dalam periode
+  const transactionsRaw = await prisma.transaction.findMany({
+    where: {
+      statusTransaksi: "AKTIF", // KECUALIKAN DIBATALKAN (FR-39, BR-13)
+      tanggal: {
+        gte: start,
+        lte: end,
+      },
+    },
+    select: {
+      id: true,
+      tanggal: true,
+      total: true,
+      statusPembayaran: true,
+      namaPembeli: true,
+    },
+    orderBy: { tanggal: "desc" },
+  });
+
+  // Transform Decimal to number
+  const transactions = transactionsRaw.map((t) => ({
+    id: t.id,
+    tanggal: t.tanggal,
+    total: Number(t.total),
+    statusPembayaran: t.statusPembayaran,
+    namaPembeli: t.namaPembeli,
+  }));
+
+  // Hitung omzet = SUM(total)
+  const omzet = transactions.reduce(
+    (sum, t) => sum + Number(t.total),
+    0,
+  );
+
+  // Hitung profit dari DetailTransaction
+  const details = await prisma.detailTransaction.findMany({
+    where: {
+      transaction: {
+        statusTransaksi: "AKTIF",
+        tanggal: {
+          gte: start,
+          lte: end,
+        },
+      },
+    },
+    select: {
+      hargaJualSnapshot: true,
+      hargaModalSnapshot: true,
+      jumlah: true,
+    },
+  });
+
+  const profit = details.reduce((sum, item) => {
+    const itemProfit =
+      (Number(item.hargaJualSnapshot) - Number(item.hargaModalSnapshot)) *
+      item.jumlah;
+    return sum + itemProfit;
+  }, 0);
+
+  return {
+    periode: {
+      start: query.start,
+      end: query.end,
+    },
+    omzet,
+    profit,
+    transactionCount: transactions.length,
+    transactions,
+  };
+}
+
+/**
+ * Laporan utang: daftar transaksi utang dengan riwayat cicilan.
+ *
+ * Referensi: FR-37, AC-14.
+ */
+export async function getDebtsReport(
+  query: ReportQuery,
+): Promise<DebtReportData> {
+  const start = new Date(query.start);
+  const end = new Date(query.end);
+
+  // Fetch transaksi utang dalam periode (dengan sisa saldo > 0)
+  const debts = await prisma.transaction.findMany({
+    where: {
+      statusPembayaran: "UTANG",
+      statusTransaksi: "AKTIF",
+      tanggal: {
+        gte: start,
+        lte: end,
+      },
+      sisaSaldoUtang: {
+        gt: 0,
+      },
+    },
+    select: {
+      id: true,
+      tanggal: true,
+      total: true,
+      namaPembeli: true,
+      noHpPembeli: true,
+      sisaSaldoUtang: true,
+      payments: {
+        select: {
+          id: true,
+          tanggalBayar: true,
+          jumlahBayar: true,
+          saldoSetelahBayar: true,
+        },
+        orderBy: { tanggalBayar: "asc" },
+      },
+    },
+    orderBy: { tanggal: "desc" },
+  });
+
+  // Hitung total saldo utang
+  const totalSaldoUtang = debts.reduce(
+    (sum, d) => sum + Number(d.sisaSaldoUtang),
+    0,
+  );
+
+  // Transform data
+  const transformedDebts = debts.map((d) => ({
+    id: d.id,
+    tanggal: d.tanggal,
+    total: Number(d.total),
+    namaPembeli: d.namaPembeli!,
+    noHpPembeli: d.noHpPembeli,
+    sisaSaldoUtang: Number(d.sisaSaldoUtang),
+    payments: d.payments.map((p) => ({
+      id: p.id,
+      tanggalBayar: p.tanggalBayar,
+      jumlahBayar: Number(p.jumlahBayar),
+      saldoSetelahBayar: Number(p.saldoSetelahBayar),
+    })),
+  }));
+
+  return {
+    periode: {
+      start: query.start,
+      end: query.end,
+    },
+    totalSaldoUtang,
+    debtCount: debts.length,
+    debts: transformedDebts,
+  };
+}
+
+/**
+ * Tren produk: minimal 5 produk terlaris dalam periode.
+ * Diurutkan berdasarkan jumlah unit terjual (descending).
+ *
+ * Referensi: FR-38, AC-16.
+ */
+export async function getProductTrend(
+  query: ReportQuery,
+): Promise<ProductTrendData> {
+  const start = new Date(query.start);
+  const end = new Date(query.end);
+
+  // Aggregate per produk: SUM(jumlah), SUM(subtotal)
+  // Menggunakan groupBy Prisma
+  const trendData = await prisma.detailTransaction.groupBy({
+    by: ["productId"],
+    where: {
+      transaction: {
+        statusTransaksi: "AKTIF",
+        tanggal: {
+          gte: start,
+          lte: end,
+        },
+      },
+    },
+    _sum: {
+      jumlah: true,
+      subtotal: true,
+    },
+    orderBy: {
+      _sum: {
+        jumlah: "desc",
+      },
+    },
+    take: 10, // ambil lebih banyak untuk antisipasi produk dihapus
+  });
+
+  // Fetch detail produk
+  const productIds = trendData.map((t) => t.productId);
+  const products = await prisma.product.findMany({
+    where: {
+      id: {
+        in: productIds,
+      },
+    },
+    select: {
+      id: true,
+      nama: true,
+      kategori: true,
+    },
+  });
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+
+  // Gabungkan data
+  const topProducts = trendData
+    .map((t) => {
+      const product = productMap.get(t.productId);
+      if (!product) return null; // produk sudah dihapus
+
+      return {
+        productId: t.productId,
+        namaProduk: product.nama,
+        kategori: product.kategori,
+        totalQuantitySold: t._sum.jumlah ?? 0,
+        totalRevenue: Number(t._sum.subtotal ?? 0),
+      };
+    })
+    .filter((p) => p !== null)
+    .slice(0, 5); // minimal 5 produk (FR-38)
+
+  return {
+    periode: {
+      start: query.start,
+      end: query.end,
+    },
+    topProducts,
+  };
+}

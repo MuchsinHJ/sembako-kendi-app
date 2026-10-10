@@ -2,17 +2,33 @@
 
 File-file Postman untuk testing API Backend Kendi's Market berdasarkan SDD v1.0.
 
+## 🚦 Implementation Status
+
+### ✅ Currently Implemented & Working:
+- **Auth Module** (Phase 1-4): Login, Refresh Token, Logout - 3 endpoints
+- **Product Module** (Phase 5-6): CRUD, stock management, photo upload - 10 endpoints  
+- **Transaction Module** (Phase 7): Create (Lunas/Utang), List, Detail, Void - 5 endpoints
+
+**Total Working Endpoints: 18/30**
+
+### 🔜 Planned (Will Return 404 Until Implemented):
+- **Debt Module** (Phase 8): Debt list, payment history, add payment - 3 endpoints
+- **Dashboard Module** (Future): Dashboard summary - 1 endpoint
+- **Report Module** (Future): Sales, debt, product trend reports & exports - 8 endpoints
+
+> **Note**: Anda dapat menggunakan collection ini untuk testing endpoint yang sudah diimplementasi. Endpoint yang belum diimplementasi akan mengembalikan error 404 Not Found.
+
 ## 📁 File yang Tersedia
 
 1. **Kendis_Market_API.postman_collection.json**
-   - Collection lengkap dengan 35+ endpoint
-   - Terorganisir dalam 6 folder utama: Auth, Product, Transaction, Debt, Dashboard, Report
+   - Collection dengan 18 working endpoints + 12 planned endpoints (total 30)
+   - Terorganisir dalam 6 folder: Auth, Product, Transaction, Debt, Dashboard, Report
    - Includes test scripts untuk auto-save token dan ID
 
 2. **Kendis_Market_Development.postman_environment.json**
    - Environment untuk development/local testing
    - Base URL: `http://localhost:3000`
-   - Pre-filled dengan kredensial default
+   - Pre-filled dengan kredensial test user: `test@example.com` / `password123`
 
 3. **Kendis_Market_Production.postman_environment.json**
    - Environment untuk production

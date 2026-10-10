@@ -8,20 +8,24 @@
  *   → pino-http (request logger) → /api/v1 routes → 404 → errorHandler
  */
 
-import express, { type Request, type Response, type NextFunction } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import cookieParser from 'cookie-parser';
-import pinoHttp from 'pino-http';
+import express, {
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
+import cors from "cors";
+import helmet from "helmet";
+import compression from "compression";
+import cookieParser from "cookie-parser";
+import pinoHttp from "pino-http";
 // pino-http CJS/ESM: factory ada di `.default` di bawah nodenext moduleResolution
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createPinoHttp = (pinoHttp as any).default ?? pinoHttp;
 
-import { config } from './config/env.js';
-import { logger } from './config/logger.js';
-import { globalLimiter } from './middlewares/rateLimiter.js';
-import { errorHandler } from './middlewares/errorHandler.js';
+import { config } from "./config/env.js";
+import { logger } from "./config/logger.js";
+import { globalLimiter } from "./middlewares/rateLimiter.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 
 // ─── Buat aplikasi Express ────────────────────────────────────────────────────
 
@@ -35,7 +39,7 @@ app.use(globalLimiter);
 app.use(helmet());
 
 // ─── 3. CORS — whitelist dari env (SDD §6.5) ─────────────────────────────────
-const allowedOrigins = config.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
+const allowedOrigins = config.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
 
 app.use(
   cors({
@@ -52,8 +56,8 @@ app.use(
 app.use(compression());
 
 // ─── 5. Body parsers ──────────────────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // ─── 6. Cookie parser (diperlukan untuk refresh token httpOnly cookie) ────────
 app.use(cookieParser());
@@ -66,7 +70,7 @@ app.use(
     // Jangan log request ke /health agar tidak bising di monitoring
     autoLogging: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ignore: (req: any) => (req.url as string) === '/api/v1/health',
+      ignore: (req: any) => (req.url as string) === "/api/v1/health",
     },
     // Tambahkan request ID ke setiap log line
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,7 +79,7 @@ app.use(
       if (existing) return existing;
       const id = crypto.randomUUID();
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      res.setHeader('X-Request-Id', id);
+      res.setHeader("X-Request-Id", id);
       return id;
     },
   }),
@@ -84,11 +88,11 @@ app.use(
 // ─── 8. Routes ────────────────────────────────────────────────────────────────
 
 // Health check — tidak butuh auth, dipakai load balancer / uptime monitor
-app.get('/api/v1/health', (_req: Request, res: Response) => {
+app.get("/api/v1/health", (_req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
-      status: 'ok',
+      status: "ok",
       environment: config.NODE_ENV,
       timestamp: new Date().toISOString(),
     },
@@ -97,33 +101,38 @@ app.get('/api/v1/health', (_req: Request, res: Response) => {
 });
 
 // Auth routes (Fase 4)
-import authRouter from './modules/auth/auth.routes.js';
-app.use('/api/v1/auth', authRouter);
+import authRouter from "./modules/auth/auth.routes.js";
+app.use("/api/v1/auth", authRouter);
 
 // Product routes (Fase 5)
-import productRouter from './modules/product/product.routes.js';
-app.use('/api/v1/products', productRouter);
+import productRouter from "./modules/product/product.routes.js";
+app.use("/api/v1/products", productRouter);
 
 // Media routes (Fase 6 - upload foto produk)
-import mediaRouter from './modules/media/media.routes.js';
-app.use('/api/v1/products', mediaRouter); // mounted under /products/:id/photo
+import mediaRouter from "./modules/media/media.routes.js";
+app.use("/api/v1/products", mediaRouter); // mounted under /products/:id/photo
 
 // Transaction routes (Fase 7)
-import transactionRouter from './modules/transaction/transaction.routes.js';
-app.use('/api/v1/transactions', transactionRouter);
+import transactionRouter from "./modules/transaction/transaction.routes.js";
+app.use("/api/v1/transactions", transactionRouter);
 
-// TODO (Fase 8): mount modul debt
-// app.use('/api/v1/debts', authenticate, debtRouter);
+// Debt routes (Fase 8)
+import debtRouter from "./modules/debt/debt.routes.js";
+app.use("/api/v1/debts", debtRouter);
 
-// TODO (Fase 9): mount modul dashboard & report
-// app.use('/api/v1/dashboard', authenticate, dashboardRouter);
-// app.use('/api/v1/reports', authenticate, reportRouter);
+// Dashboard routes (Fase 9)
+import dashboardRouter from "./modules/dashboard/dashboard.routes.js";
+app.use("/api/v1/dashboard", dashboardRouter);
+
+// Report routes (Fase 9)
+import reportRouter from "./modules/report/report.routes.js";
+app.use("/api/v1/reports", reportRouter);
 
 // ─── 9. 404 handler ───────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
     success: false,
-    error: { code: 'NOT_FOUND', message: 'Endpoint tidak ditemukan.' },
+    error: { code: "NOT_FOUND", message: "Endpoint tidak ditemukan." },
   });
 });
 
