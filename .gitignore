@@ -12,3 +12,5 @@ coverage/
 .idea/
 
 *.log
+
+.claude/
