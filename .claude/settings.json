@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(tail -100 C:\\\\\\\\Users\\\\\\\\Muchs\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\d--Full-Stack-Projek-UMKM-sembako-kendi-app\\\\\\\\f601467d-117e-40bf-bafb-bd11bcf09c4f\\\\\\\\tasks\\\\\\\\bcetp9882.output)",
-      "Bash(git add *)"
-    ]
-  }
-}
