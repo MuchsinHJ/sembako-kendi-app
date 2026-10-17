@@ -85,7 +85,7 @@ describe('Transaction Service', () => {
   describe('createTransaction', () => {
     it('AC-04: BR-05 - Stok tidak mencukupi harus ditolak', async () => {
       const input = {
-        statusPembayaran: PaymentStatus.LUNAS,
+        uangDiterima: 10000,
         items: [
           {
             productId: testProductId,
@@ -101,7 +101,7 @@ describe('Transaction Service', () => {
 
     it('AC-05: BR-08 - UTANG tanpa nama pembeli harus ditolak', async () => {
       const input = {
-        statusPembayaran: PaymentStatus.UTANG,
+        uangDiterima: 10000, // total 5 x 10.000 = 50.000 → kurang bayar
         noHpPembeli: '081234567890',
         items: [
           {
@@ -118,7 +118,7 @@ describe('Transaction Service', () => {
 
     it('AC-05: BR-08 - UTANG tanpa nomor HP berhasil (noHpPembeli opsional)', async () => {
       const input = {
-        statusPembayaran: PaymentStatus.UTANG,
+        uangDiterima: 0,
         namaPembeli: 'Budi Tanpa HP',
         items: [
           {
@@ -133,11 +133,12 @@ describe('Transaction Service', () => {
       expect(result.namaPembeli).toBe('Budi Tanpa HP');
       expect(result.noHpPembeli).toBeNull();
       expect(result.statusPembayaran).toBe(PaymentStatus.UTANG);
+      expect(result.sisaSaldoUtang?.toString()).toBe('50000');
     });
 
     it('Transaksi LUNAS berhasil tanpa nama/nomor HP', async () => {
       const input = {
-        statusPembayaran: PaymentStatus.LUNAS,
+        uangDiterima: 20000,
         items: [
           {
             productId: testProductId,
@@ -155,6 +156,8 @@ describe('Transaction Service', () => {
       expect(transaction.statusPembayaran).toBe(PaymentStatus.LUNAS);
       expect(transaction.statusTransaksi).toBe(TransactionStatus.AKTIF);
       expect(transaction.total.toString()).toBe('20000'); // 2 * 10000
+      expect(transaction.uangDiterima?.toString()).toBe('20000');
+      expect(transaction.kembalian?.toString()).toBe('0');
       expect(transaction.sisaSaldoUtang).toBeNull();
       expect(transaction.items).toHaveLength(1);
       expect(transaction.items[0].jumlah).toBe(2);
@@ -166,9 +169,45 @@ describe('Transaction Service', () => {
       expect(product?.stok).toBeLessThan(100);
     });
 
+    it('FR-20: Uang diterima lebih besar dari total → LUNAS dengan kembalian', async () => {
+      const transaction = await transactionService.createTransaction(
+        {
+          uangDiterima: 50000,
+          items: [{ productId: testProductId, jumlah: 2 }], // total 20.000
+        },
+        testUserId,
+      );
+
+      expect(transaction.total.toString()).toBe('20000');
+      expect(transaction.uangDiterima?.toString()).toBe('50000');
+      expect(transaction.kembalian?.toString()).toBe('30000');
+      expect(transaction.statusPembayaran).toBe(PaymentStatus.LUNAS);
+      expect(transaction.sisaSaldoUtang).toBeNull();
+    });
+
+    it('FR-20: Uang diterima kurang dari total → UTANG dengan sisa saldo (uang muka tersimpan di transaksi)', async () => {
+      const transaction = await transactionService.createTransaction(
+        {
+          uangDiterima: 30000,
+          namaPembeli: 'Siti DP',
+          items: [{ productId: testProductId, jumlah: 5 }], // total 50.000
+        },
+        testUserId,
+      );
+
+      expect(transaction.total.toString()).toBe('50000');
+      expect(transaction.uangDiterima?.toString()).toBe('30000');
+      expect(transaction.kembalian).toBeNull();
+      expect(transaction.statusPembayaran).toBe(PaymentStatus.UTANG);
+      expect(transaction.sisaSaldoUtang?.toString()).toBe('20000');
+      // Opsi A: uang muka tidak dibuat sebagai entri PaymentHistory,
+      // sehingga transaksi hari yang sama masih dapat di-void (BR-13).
+      expect(transaction.payments).toHaveLength(0);
+    });
+
     it('Transaksi UTANG berhasil dengan nama dan nomor HP', async () => {
       const input = {
-        statusPembayaran: PaymentStatus.UTANG,
+        uangDiterima: 0,
         namaPembeli: 'Siti',
         noHpPembeli: '081234567890',
         items: [
@@ -189,6 +228,7 @@ describe('Transaction Service', () => {
       expect(transaction.namaPembeli).toBe('Siti');
       expect(transaction.noHpPembeli).toBe('081234567890');
       expect(transaction.total.toString()).toBe('30000'); // 3 * 10000
+      expect(transaction.uangDiterima?.toString()).toBe('0');
       expect(transaction.sisaSaldoUtang?.toString()).toBe('30000');
     });
 
@@ -207,7 +247,7 @@ describe('Transaction Service', () => {
       });
 
       const input = {
-        statusPembayaran: PaymentStatus.LUNAS,
+        uangDiterima: 37037.01,
         items: [
           {
             productId: productDecimal.id,
@@ -250,7 +290,7 @@ describe('Transaction Service', () => {
       });
 
       const input = {
-        statusPembayaran: PaymentStatus.LUNAS,
+        uangDiterima: 5000,
         items: [
           {
             productId: inactiveProduct.id,
@@ -269,7 +309,7 @@ describe('Transaction Service', () => {
 
     it('Produk tidak ditemukan harus ditolak', async () => {
       const input = {
-        statusPembayaran: PaymentStatus.LUNAS,
+        uangDiterima: 5000,
         items: [
           {
             productId: '00000000-0000-0000-0000-000000000000',
@@ -292,7 +332,7 @@ describe('Transaction Service', () => {
       // Create test transactions
       const tx1 = await transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.LUNAS,
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         },
         testUserId,
@@ -301,7 +341,7 @@ describe('Transaction Service', () => {
 
       const tx2 = await transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.UTANG,
+          uangDiterima: 0,
           namaPembeli: 'Test Buyer',
           noHpPembeli: '081234567890',
           items: [{ productId: testProductId, jumlah: 2 }],
@@ -355,7 +395,7 @@ describe('Transaction Service', () => {
     beforeAll(async () => {
       const tx = await transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.LUNAS,
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         },
         testUserId,
@@ -390,7 +430,7 @@ describe('Transaction Service', () => {
       // Create new transaction
       const transaction = await transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.LUNAS,
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         },
         testUserId,
@@ -423,7 +463,7 @@ describe('Transaction Service', () => {
       // Create and void transaction
       const transaction = await transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.LUNAS,
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         },
         testUserId,
@@ -440,7 +480,7 @@ describe('Transaction Service', () => {
       // Create UTANG transaction
       const transaction = await transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.UTANG,
+          uangDiterima: 0,
           namaPembeli: 'Test Buyer',
           noHpPembeli: '081234567890',
           items: [{ productId: testProductId, jumlah: 1 }],
@@ -462,6 +502,25 @@ describe('Transaction Service', () => {
       await expect(
         transactionService.voidTransaction(transaction.id),
       ).rejects.toThrow(BusinessRuleError);
+    });
+
+    it('FR-20 + AC-08: UTANG dengan uang muka (tanpa cicilan) masih bisa di-void hari yang sama', async () => {
+      // Opsi A: uang muka disimpan pada Transaction, bukan PaymentHistory,
+      // sehingga aturan BR-13 "sudah ada cicilan" tidak memblokir void.
+      const transaction = await transactionService.createTransaction(
+        {
+          uangDiterima: 5000,
+          namaPembeli: 'Buyer DP',
+          items: [{ productId: testProductId, jumlah: 1 }], // total 10.000
+        },
+        testUserId,
+      );
+
+      expect(transaction.statusPembayaran).toBe(PaymentStatus.UTANG);
+      expect(transaction.sisaSaldoUtang?.toString()).toBe('5000');
+
+      const voided = await transactionService.voidTransaction(transaction.id);
+      expect(voided.statusTransaksi).toBe(TransactionStatus.DIBATALKAN);
     });
 
     it('Transaction tidak ditemukan harus throw NotFoundError', async () => {
@@ -491,7 +550,7 @@ describe('Transaction Service', () => {
       // Dua transaksi paralel yang masing-masing minta 4 unit
       const promise1 = transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.LUNAS,
+          uangDiterima: 20000,
           items: [{ productId: limitedProduct.id, jumlah: 4 }],
         },
         testUserId,
@@ -499,7 +558,7 @@ describe('Transaction Service', () => {
 
       const promise2 = transactionService.createTransaction(
         {
-          statusPembayaran: PaymentStatus.LUNAS,
+          uangDiterima: 20000,
           items: [{ productId: limitedProduct.id, jumlah: 4 }],
         },
         testUserId,

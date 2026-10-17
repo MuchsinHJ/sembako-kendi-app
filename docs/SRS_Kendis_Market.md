@@ -62,7 +62,7 @@ Pada MVP, sistem hanya memiliki **satu role: `User`**. Setiap pengguna disaranka
 | Mengubah produk | ✓ | Termasuk perubahan harga (tidak memengaruhi transaksi lama) |
 | Menghapus produk | ✓ (bersyarat) | Hanya produk tanpa riwayat transaksi; produk dengan riwayat hanya dapat di-nonaktifkan (soft delete) |
 | Mengatur ambang batas stok minimum | ✓ | Per produk |
-| Membuat transaksi (Lunas/Utang) | ✓ | — |
+| Membuat transaksi (Lunas/Utang) | ✓ | Status pembayaran diturunkan dari uang diterima vs total |
 | Membatalkan/void transaksi | ✓ (bersyarat) | Hanya dalam batas waktu yang ditentukan (mis. hari yang sama) |
 | Mencatat pelunasan utang (penuh/cicilan) | ✓ | — |
 | Melihat riwayat transaksi | ✓ | Termasuk transaksi berstatus "Dibatalkan" |
@@ -108,8 +108,8 @@ Setiap FR memuat referensi ke User Story (US) dan Business Rule (BR) terkait pad
 | FR-17 | Sistem harus menolak input jumlah produk yang ≤ 0 atau melebihi stok yang tersedia. | BR-05 |
 | FR-18 | Sistem harus menghitung total transaksi sebagai penjumlahan (harga jual × jumlah) dari setiap item. | BR-07 |
 | FR-19 | Sistem harus menampilkan format nilai uang dalam Rupiah (Rp) dengan pemisah ribuan. | BR-16 |
-| FR-20 | Sistem harus memungkinkan pengguna memilih status pembayaran transaksi: **Lunas** atau **Utang**. | US-04, BR-08 |
-| FR-21 | Jika status transaksi Utang, sistem harus mewajibkan input nama dan nomor HP (opsional) pembeli sebelum transaksi dapat disimpan. | BR-08 |
+| FR-20 | Sistem harus mencatat uang tunai yang diterima dari pembeli (`uangDiterima`) dan **menurunkan status pembayaran secara otomatis**: jika `uangDiterima >= total` maka status **Lunas** dan sistem menghitung kembalian (`uangDiterima − total`); jika `uangDiterima < total` maka status **Utang** dan sistem menghitung sisa saldo (`total − uangDiterima`). | US-04, BR-08 |
+| FR-21 | Jika `uangDiterima < total` (transaksi Utang), sistem harus mewajibkan input nama pembeli (nomor HP opsional) sebelum transaksi dapat disimpan. | BR-08 |
 | FR-22 | Sistem harus mengurangi stok produk secara otomatis segera setelah transaksi berhasil disimpan, baik untuk status Lunas maupun Utang. | BR-09 |
 | FR-23 | Sistem harus menyimpan harga jual dan harga modal **pada saat transaksi terjadi** (snapshot), terlepas dari perubahan harga produk di kemudian hari. | BR-10 |
 | FR-24 | Sistem harus mencatat setiap transaksi ke dalam riwayat transaksi yang dapat ditelusuri kembali berdasarkan tanggal/periode. | US-05 |
@@ -175,7 +175,7 @@ Aturan berikut berlaku lintas fitur dan wajib ditegakkan oleh sistem di seluruh 
 | BR-05 | Jumlah produk pada transaksi harus > 0 dan tidak boleh melebihi stok yang tersedia saat transaksi dibuat. |
 | BR-06 | Satu transaksi dapat terdiri dari satu atau lebih produk. |
 | BR-07 | Total transaksi = jumlah dari (harga jual × jumlah) setiap item transaksi. |
-| BR-08 | Transaksi Utang wajib menyimpan nama pembeli (nomor HP opsional) beserta sisa saldo yang belum dibayar. |
+| BR-08 | Status pembayaran transaksi ditentukan dari uang tunai yang diterima (`uangDiterima`) dibandingkan dengan total transaksi. Jika `uangDiterima >= total` → Lunas (kelebihan dicatat sebagai kembalian); jika `uangDiterima < total` → Utang, wajib menyimpan nama pembeli (nomor HP opsional) beserta sisa saldo yang belum dibayar. |
 | BR-09 | Stok berkurang segera setelah transaksi berhasil disimpan, untuk status Lunas maupun Utang. |
 | BR-10 | Perubahan harga produk tidak memengaruhi nilai historis pada transaksi yang sudah terjadi (snapshot harga per transaksi). |
 | BR-11 | Perhitungan profit = nilai penjualan − harga modal yang tercatat pada saat transaksi. |
@@ -239,7 +239,9 @@ Aturan berikut berlaku lintas fitur dan wajib ditegakkan oleh sistem di seluruh 
 | id | UUID / Integer (PK) | Identitas unik transaksi |
 | tanggal | Timestamp | Waktu transaksi dibuat |
 | total | Decimal | Total nilai transaksi (BR-07) |
-| status_pembayaran | Enum (`lunas`, `utang`) | BR-08 |
+| uang_diterima | Decimal (nullable untuk data historis; wajib diisi untuk transaksi baru) | Uang tunai yang diserahkan pembeli (FR-20, BR-08) |
+| kembalian | Decimal (nullable) | `uang_diterima − total` bila Lunas; `null` bila Utang (FR-20) |
+| status_pembayaran | Enum (`lunas`, `utang`) | Diturunkan otomatis dari `uang_diterima` vs `total` (FR-20, BR-08) |
 | status_transaksi | Enum (`aktif`, `dibatalkan`) | BR-13 |
 | nama_pembeli | String (nullable, wajib jika utang) | BR-08 |
 | no_hp_pembeli | String (nullable, opsional jika utang) | BR-08 |
@@ -318,9 +320,19 @@ When pengguna membuat transaksi dengan jumlah 5 unit produk tersebut,
 Then sistem menolak transaksi dan menampilkan pesan bahwa jumlah melebihi stok tersedia. *(FR-17, BR-05)*
 
 **AC-05**
-Given pengguna memilih status pembayaran "Utang" pada form transaksi,
+Given total transaksi adalah Rp30.000 dan pengguna memasukkan uang diterima Rp10.000 (kurang dari total),
 When pengguna mencoba menyimpan transaksi tanpa mengisi nama pembeli,
-Then sistem menolak penyimpanan dan menandai field nama sebagai wajib diisi (nomor HP opsional). *(FR-21, BR-08)*
+Then sistem menolak penyimpanan dan menandai field nama sebagai wajib diisi (nomor HP opsional). *(FR-20, FR-21, BR-08)*
+
+**AC-05a**
+Given total transaksi adalah Rp20.000 dan pengguna memasukkan uang diterima Rp50.000,
+When transaksi disimpan,
+Then sistem menetapkan status pembayaran **Lunas** dan menampilkan kembalian sebesar Rp30.000. *(FR-20, BR-08)*
+
+**AC-05b**
+Given total transaksi adalah Rp30.000 dan pengguna memasukkan uang diterima Rp10.000 serta nama pembeli,
+When transaksi disimpan,
+Then sistem menetapkan status pembayaran **Utang** dengan sisa saldo Rp20.000, dan stok produk tetap berkurang sesuai jumlah terjual (BR-09). *(FR-20, FR-22, BR-08)*
 
 **AC-06**
 Given transaksi berhasil disimpan dengan status Lunas,

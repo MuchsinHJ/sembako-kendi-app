@@ -20,6 +20,8 @@ export const listDebts = asyncHandler(async (req: Request, res: Response) => {
     ...t,
     total: t.total.toString(),
     sisaSaldoUtang: t.sisaSaldoUtang?.toString() || null,
+    uangDiterima: t.uangDiterima?.toString() || null,
+    kembalian: t.kembalian?.toString() || null,
     items: t.items.map((item) => ({
       ...item,
       hargaJualSnapshot: item.hargaJualSnapshot.toString(),
@@ -81,6 +83,8 @@ export const recordPayment = asyncHandler(
       ...transaction,
       total: transaction.total.toString(),
       sisaSaldoUtang: transaction.sisaSaldoUtang?.toString() || null,
+      uangDiterima: transaction.uangDiterima?.toString() || null,
+      kembalian: transaction.kembalian?.toString() || null,
       items: transaction.items.map((item) => ({
         ...item,
         hargaJualSnapshot: item.hargaJualSnapshot.toString(),

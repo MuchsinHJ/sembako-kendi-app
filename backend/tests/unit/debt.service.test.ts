@@ -83,6 +83,7 @@ describe('Debt Service', () => {
         statusPembayaran: PaymentStatus.UTANG,
         statusTransaksi: TransactionStatus.AKTIF,
         total: new Decimal('100000'),
+        uangDiterima: new Decimal('0'),
         sisaSaldoUtang: new Decimal('100000'),
         namaPembeli: 'Test Customer',
         noHpPembeli: '081234567890',
@@ -147,6 +148,8 @@ describe('Debt Service', () => {
           statusPembayaran: PaymentStatus.LUNAS,
           statusTransaksi: TransactionStatus.AKTIF,
           total: new Decimal('50000'),
+          uangDiterima: new Decimal('50000'),
+          kembalian: new Decimal('0'),
           sisaSaldoUtang: new Decimal('0'),
           dibuatOlehId: testUserId,
           items: {
@@ -240,6 +243,8 @@ describe('Debt Service', () => {
           statusPembayaran: PaymentStatus.LUNAS,
           statusTransaksi: TransactionStatus.AKTIF,
           total: new Decimal('50000'),
+          uangDiterima: new Decimal('50000'),
+          kembalian: new Decimal('0'),
           sisaSaldoUtang: null, // NULL indicates it was never UTANG
           dibuatOlehId: testUserId,
           items: {

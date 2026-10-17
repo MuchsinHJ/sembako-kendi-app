@@ -2,29 +2,35 @@ import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+/**
+ * Test ini sengaja TIDAK menghapus seluruh isi database: suite lain berbagi
+ * user seed `test@example.com`, sehingga `deleteMany()` global membuat hasil
+ * test bergantung pada urutan eksekusi. Cleanup dibatasi ke data milik test ini.
+ */
+const CONSTRAINT_TEST_EMAIL = 'test_constraint@kendismarket.com';
+const CONSTRAINT_NEGATIVE_EMAIL = 'test_constraint_negative@kendismarket.com';
+
+const cleanupOwnData = async () => {
+  const users = await prisma.user.findMany({
+    where: { email: { in: [CONSTRAINT_TEST_EMAIL, CONSTRAINT_NEGATIVE_EMAIL] } },
+  });
+
+  for (const user of users) {
+    await prisma.detailTransaction.deleteMany({
+      where: { transaction: { dibuatOlehId: user.id } },
+    });
+    await prisma.transaction.deleteMany({ where: { dibuatOlehId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+};
+
 describe('Database CHECK Constraints', () => {
   beforeAll(async () => {
-    // clean db before tests - delete in correct order to avoid FK violations
-    await prisma.paymentHistory.deleteMany();
-    await prisma.detailTransaction.deleteMany();
-    await prisma.transaction.deleteMany();
-    await prisma.stockAdjustment.deleteMany();
-    await prisma.product.deleteMany();
-    await prisma.refreshToken.deleteMany();
-    await prisma.session.deleteMany();
-    await prisma.user.deleteMany();
+    await cleanupOwnData();
   });
 
   afterAll(async () => {
-    // Clean up in correct order to avoid FK violations
-    await prisma.paymentHistory.deleteMany();
-    await prisma.detailTransaction.deleteMany();
-    await prisma.transaction.deleteMany();
-    await prisma.stockAdjustment.deleteMany();
-    await prisma.product.deleteMany();
-    await prisma.refreshToken.deleteMany();
-    await prisma.session.deleteMany();
-    await prisma.user.deleteMany();
+    await cleanupOwnData();
     await prisma.$disconnect();
   });
 
@@ -70,6 +76,8 @@ describe('Database CHECK Constraints', () => {
     const trx = await prisma.transaction.create({
       data: {
         total: 10,
+        uangDiterima: 10,
+        kembalian: 0,
         statusPembayaran: 'LUNAS',
         dibuatOlehId: user.id,
       }
@@ -98,5 +106,31 @@ describe('Database CHECK Constraints', () => {
         }
       })
     ).rejects.toThrow();
+
+    // Cleanup data milik test ini saja (product tidak punya relasi tersisa)
+    await prisma.product.delete({ where: { id: product.id } });
+  });
+
+  it('should reject Transaction with negative uangDiterima (BR-07)', async () => {
+    const user = await prisma.user.create({
+      data: {
+        nama: 'Test User Negative',
+        email: 'test_constraint_negative@kendismarket.com',
+        passwordHash: 'hash',
+      },
+    });
+
+    await expect(
+      prisma.transaction.create({
+        data: {
+          total: 10,
+          uangDiterima: -1,
+          statusPembayaran: 'LUNAS',
+          dibuatOlehId: user.id,
+        },
+      }),
+    ).rejects.toThrow();
+
+    await prisma.user.delete({ where: { id: user.id } });
   });
 });

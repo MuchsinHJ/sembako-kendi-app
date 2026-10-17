@@ -54,7 +54,7 @@
 | Mengubah produk | ✓ | Harga dan data produk dapat diperbarui. |
 | Menghapus produk | ✓ | Produk yang sudah memiliki riwayat transaksi tidak dapat dihapus permanen — hanya dapat dinonaktifkan (soft delete) agar riwayat transaksi tidak rusak. Produk tanpa riwayat transaksi dapat dihapus permanen. |
 | Mengelola stok | ✓ | Penyesuaian stok dapat dilakukan sesuai aturan bisnis; sistem menampilkan peringatan saat stok mencapai ambang batas minimum. |
-| Membuat transaksi | ✓ | Mendukung status Lunas dan Utang. |
+| Membuat transaksi | ✓ | Status Lunas/Utang diturunkan dari uang yang diterima; kembalian dan sisa utang dihitung otomatis. |
 | Membatalkan/mengoreksi transaksi | ✓ | Hanya dapat dilakukan dalam batas waktu tertentu setelah transaksi disimpan (mis. hari yang sama); stok dikembalikan dan status transaksi ditandai "Dibatalkan", bukan dihapus dari riwayat. |
 | Mencatat pelunasan utang | ✓ | Mendukung pelunasan penuh maupun bertahap (cicilan); setiap pembayaran tercatat sebagai riwayat pada transaksi utang terkait. |
 | Melihat riwayat transaksi | ✓ | Dapat ditelusuri berdasarkan periode dan informasi transaksi, termasuk transaksi yang dibatalkan. |
@@ -71,7 +71,7 @@
 * Katalog dan manajemen produk (CRUD), termasuk kategori, harga jual, harga modal, stok, dan foto produk bila diperlukan.
 * Pengkategorian produk.
 * Manajemen stok.
-* Transaksi penjualan dengan skema Lunas atau Utang.
+* Transaksi penjualan dengan pencatatan uang diterima; status Lunas/Utang, kembalian, dan sisa utang dihitung otomatis.
 * Riwayat transaksi.
 * Laporan penjualan berdasarkan periode.
 * Laporan utang pembeli.
@@ -100,7 +100,7 @@
 | US-01 | Pengguna | login ke sistem melalui satu proses yang sederhana | dapat mengakses data usaha sesuai akun saya. |
 | US-02 | Pengguna | melihat daftar produk beserta harga dan stok | dapat mengetahui barang yang tersedia tanpa mengandalkan catatan manual. |
 | US-03 | Pengguna | menambah dan mengubah data produk | data produk dan harga dapat diperbarui ketika kondisi usaha berubah. |
-| US-04 | Pengguna | melakukan transaksi penjualan dengan status Lunas atau Utang | semua penjualan dapat tercatat dengan jelas. |
+| US-04 | Pengguna | melakukan transaksi penjualan dengan mencatat uang yang diterima dari pembeli, sehingga status Lunas atau Utang tercatat otomatis | semua penjualan dapat tercatat dengan jelas tanpa salah pilih status. |
 | US-05 | Pengguna | melihat riwayat transaksi | dapat menelusuri transaksi yang telah dilakukan. |
 | US-06 | Pengguna | melihat laporan penjualan | dapat mengetahui omzet dan estimasi profit berdasarkan periode. |
 | US-07 | Pengguna | melihat daftar utang pembeli | dapat mengetahui transaksi yang belum lunas. |
@@ -114,8 +114,8 @@
 ## 8. User Flow
 * **Flow 1 – Login:** Buka aplikasi → Login → Dashboard.
 * **Flow 2 – Kelola Produk:** Dashboard → Produk → Tambah/Ubah produk → Simpan → Daftar produk diperbarui.
-* **Flow 3 – Transaksi Lunas:** Dashboard → Transaksi → Pilih produk → Masukkan jumlah → Sistem hitung total → Pilih Lunas → Simpan transaksi → Stok berkurang → Transaksi tercatat.
-* **Flow 4 – Transaksi Utang:** Dashboard → Transaksi → Pilih produk → Masukkan jumlah → Sistem hitung total → Pilih Utang → Catat identitas pembeli (nama, no. HP) → Simpan transaksi → Stok berkurang → Utang tercatat.
+* **Flow 3 – Transaksi Lunas:** Dashboard → Transaksi → Pilih produk → Masukkan jumlah → Sistem hitung total → Masukkan uang yang diterima (≥ total) → Sistem menampilkan kembalian → Simpan transaksi → Stok berkurang → Transaksi tercatat sebagai Lunas.
+* **Flow 4 – Transaksi Utang:** Dashboard → Transaksi → Pilih produk → Masukkan jumlah → Sistem hitung total → Masukkan uang yang diterima (< total) → Catat identitas pembeli (nama wajib, no. HP opsional) → Sistem menampilkan sisa utang → Simpan transaksi → Stok berkurang → Utang tercatat.
 * **Flow 5 – Laporan:** Dashboard → Laporan → Pilih periode → Sistem menampilkan omzet, estimasi profit, transaksi, utang, dan tren produk → (opsional) Ekspor ke Excel/PDF.
 * **Flow 6 – Pembatalan Transaksi [BARU/REVISI]:** Riwayat transaksi → Pilih transaksi → Batalkan transaksi → Konfirmasi → Stok dikembalikan → Status transaksi menjadi "Dibatalkan".
 * **Flow 7 – Pelunasan Utang Bertahap [BARU/REVISI]:** Laporan Utang → Pilih pembeli/transaksi → Catat jumlah pembayaran → Simpan → Saldo utang berkurang → Status otomatis menjadi "Lunas" jika saldo mencapai 0.
@@ -131,7 +131,7 @@
 | BR-05 | Jumlah produk pada transaksi harus lebih besar dari 0 dan tidak boleh melebihi stok yang tersedia. |
 | BR-06 | Satu transaksi dapat berisi satu atau lebih produk. |
 | BR-07 | Total transaksi merupakan penjumlahan harga jual dikalikan jumlah setiap item transaksi. |
-| BR-08 | Transaksi berstatus Lunas dianggap selesai dibayar. Transaksi berstatus Utang harus menyimpan nama pembeli (nomor HP opsional) agar dapat ditelusuri, beserta saldo yang belum dibayar. |
+| BR-08 | Status pembayaran transaksi ditentukan otomatis dari uang tunai yang diterima pembeli dibandingkan dengan total transaksi. Jika uang diterima ≥ total, transaksi berstatus Lunas dan kelebihannya dicatat sebagai kembalian. Jika uang diterima < total, transaksi berstatus Utang, wajib menyimpan nama pembeli (nomor HP opsional), beserta sisa saldo yang belum dibayar. |
 | BR-09 | Stok berkurang ketika transaksi berhasil disimpan, baik transaksi Lunas maupun Utang. |
 | BR-10 | Perubahan harga produk tidak boleh mengubah nilai historis pada transaksi yang sudah terjadi; harga pada saat transaksi perlu tersimpan pada detail transaksi. |
 | BR-11 | Perhitungan profit menggunakan nilai penjualan dikurangi harga modal yang tercatat pada saat transaksi. |
@@ -188,7 +188,7 @@
 - [ ] Pengguna dapat melihat, menambah, mengubah, dan menghapus data produk sesuai aturan sistem.
 - [ ] Data produk minimal dapat menyimpan nama, kategori, harga jual, harga modal, dan stok.
 - [ ] Pengguna dapat membuat transaksi yang terdiri dari satu atau lebih produk.
-- [ ] Sistem mendukung transaksi Lunas dan Utang.
+- [ ] Sistem mendukung transaksi Lunas dan Utang, dengan status ditentukan otomatis dari uang yang diterima (termasuk perhitungan kembalian).
 - [ ] Sistem menolak transaksi apabila jumlah barang melebihi stok yang tersedia.
 - [ ] Stok berkurang otomatis setelah transaksi berhasil.
 - [ ] Riwayat transaksi dapat ditampilkan kembali tanpa mengubah data historis harga transaksi.
@@ -208,3 +208,4 @@
 | :--- | :--- | :--- |
 | Draft awal | - | Versi PRD yang diserahkan untuk review. |
 | Revisi 2 (dokumen ini) | September 2026 | Menambahkan: aturan void/pembatalan transaksi, pelunasan utang bertahap, low-stock alert, ekspor laporan, aturan soft delete produk, Non-Functional Requirements, Assumptions & Constraints, Risks, metrik sukses yang terukur, dan acceptance criteria tambahan. |
+| Revisi 3 | Oktober 2026 | Status pembayaran Lunas/Utang tidak lagi dipilih manual: pengguna mencatat uang tunai yang diterima, sistem menurunkan status, menghitung kembalian, dan menghitung sisa utang (BR-08, US-04, Flow 3/4). |

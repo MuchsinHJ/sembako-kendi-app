@@ -57,8 +57,8 @@ Dokumen ini memetakan setiap Functional Requirement (FR), Business Rule (BR), da
 | FR-17 | Validasi jumlah > 0 dan <= stok | Transaction | `POST /transactions` | `transaction.schema.ts:25`, `transaction.service.ts:68` | `transaction.test.ts:75` |
 | FR-18 | Hitung total = SUM(harga × jumlah) | Transaction | `POST /transactions` | `transaction.service.ts:88` | `transaction.test.ts:95` |
 | FR-19 | Format Rupiah dengan pemisah ribuan | Transaction, Report | — | `money.ts:35`, `export.service.ts` | — |
-| FR-20 | Pilih status Lunas/Utang | Transaction | `POST /transactions` | `transaction.schema.ts:35` | `transaction.test.ts:110` |
-| FR-21 | Input nama & HP wajib jika Utang | Transaction | `POST /transactions` | `transaction.schema.ts:40`, `transaction.service.ts:105` | `transaction.test.ts:125` |
+| FR-20 | Catat uang diterima; status Lunas/Utang + kembalian + sisa utang diturunkan otomatis | Transaction | `POST /transactions` | `transaction.schema.ts` (`uangDiterima`), `transaction.service.ts` (derivasi Decimal) | `transaction.test.ts` (FR-20), `transaction.service.test.ts` (FR-20) |
+| FR-21 | Input nama wajib jika uang diterima < total (Utang); HP opsional | Transaction | `POST /transactions` | `transaction.service.ts` (BR-08 check), `transaction.schema.ts` | `transaction.test.ts:125` |
 | FR-22 | Stok berkurang otomatis setelah transaksi | Transaction | `POST /transactions` | `transaction.service.ts:140` | `transaction.test.ts:150` |
 | FR-23 | Snapshot harga saat transaksi | Transaction | `POST /transactions` | `transaction.service.ts:120` | `transaction.test.ts:180` |
 | FR-24 | Riwayat transaksi dapat ditelusuri | Transaction | `GET /transactions` | `transaction.service.ts:25` | `transaction.test.ts:25` |
@@ -165,6 +165,13 @@ Dokumen ini memetakan setiap Functional Requirement (FR), Business Rule (BR), da
 
 ### 8.5 Test Stability
 - Jest config di-set `maxWorkers: 1` (sequential execution) untuk menghindari race condition pada test database.
+- Test API memakai `tests/helpers/testUser.ts` (`ensureTestUser`) agar tidak bergantung pada urutan eksekusi suite atau status seed database.
+
+### 8.6 Revisi FR-20 — Status Pembayaran Diturunkan dari Uang Diterima
+- Request `POST /transactions` memakai `uangDiterima` (bukan `statusPembayaran`).
+- Turunan: `uangDiterima >= total` → `LUNAS` + `kembalian`; `uangDiterima < total` → `UTANG` + `sisaSaldoUtang`, nama pembeli wajib.
+- Uang muka transaksi Utang disimpan pada `Transaction.uangDiterima` (Opsi A), bukan `PaymentHistory`, agar void hari yang sama tetap mungkin (BR-13).
+- Migration: `prisma/migrations/20261017_add_uang_diterima_kembalian` (+ backfill LUNAS lama).
 
 ---
 
@@ -178,8 +185,8 @@ Dokumen ini memetakan setiap Functional Requirement (FR), Business Rule (BR), da
 
 ## 10. Test Coverage Summary
 
-**Total tests:** 145  
-**Passed:** 145 (100%)  
+**Total tests:** 153  
+**Passed:** 153 (100%)  
 **Failed:** 0  
 
 **Coverage per layer:**

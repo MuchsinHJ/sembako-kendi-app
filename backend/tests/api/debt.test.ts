@@ -9,6 +9,7 @@ import app from '../../src/app.js';
 import { prisma } from '../../src/config/db.js';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
+import { TEST_USER, ensureTestUser } from '../helpers/testUser.js';
 
 let authToken: string;
 let testUserId: string;
@@ -16,10 +17,13 @@ let testProductId: string;
 let testTransactionUtangId: string;
 
 beforeAll(async () => {
+  // Pastikan user seed tersedia (tidak bergantung pada urutan suite lain)
+  await ensureTestUser();
+
   // Login untuk mendapat token
   const loginRes = await request(app).post('/api/v1/auth/login').send({
-    email: 'test@example.com',
-    password: 'password123',
+    email: TEST_USER.email,
+    password: TEST_USER.password,
   });
 
   authToken = loginRes.body.data.accessToken;
@@ -45,7 +49,7 @@ beforeAll(async () => {
     .post('/api/v1/transactions')
     .set('Authorization', `Bearer ${authToken}`)
     .send({
-      statusPembayaran: 'UTANG',
+      uangDiterima: 0,
       namaPembeli: 'Test Customer Debt',
       noHpPembeli: '081234567890',
       items: [
@@ -220,7 +224,7 @@ describe('Debt API (AC-10, AC-11, AC-12)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'UTANG',
+          uangDiterima: 0,
           namaPembeli: 'Customer',
           noHpPembeli: '081234567890',
           items: [
@@ -255,7 +259,7 @@ describe('Debt API (AC-10, AC-11, AC-12)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 20000,
           items: [
             {
               productId: testProductId,
@@ -287,7 +291,7 @@ describe('Debt API (AC-10, AC-11, AC-12)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'UTANG',
+          uangDiterima: 0,
           namaPembeli: 'Fresh Customer',
           noHpPembeli: '081234567890',
           items: [

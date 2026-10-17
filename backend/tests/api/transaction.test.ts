@@ -6,16 +6,20 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { prisma } from '../../src/config/db.js';
+import { TEST_USER, ensureTestUser } from '../helpers/testUser.js';
 
 let authToken: string;
 let testUserId: string;
 let testProductId: string;
 
 beforeAll(async () => {
+  // Pastikan user seed tersedia (tidak bergantung pada urutan suite lain)
+  await ensureTestUser();
+
   // Login untuk mendapat token
   const loginRes = await request(app).post('/api/v1/auth/login').send({
-    email: 'test@example.com',
-    password: 'password123',
+    email: TEST_USER.email,
+    password: TEST_USER.password,
   });
 
   authToken = loginRes.body.data.accessToken;
@@ -67,7 +71,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 20000,
           items: [
             {
               productId: testProductId,
@@ -81,9 +85,46 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
       expect(res.body.data.statusPembayaran).toBe('LUNAS');
       expect(res.body.data.statusTransaksi).toBe('AKTIF');
       expect(res.body.data.total).toBe('20000');
+      expect(res.body.data.uangDiterima).toBe('20000');
+      expect(res.body.data.kembalian).toBe('0');
       expect(res.body.data.sisaSaldoUtang).toBeNull();
       expect(res.body.data.items).toHaveLength(1);
       expect(res.body.data.items[0].jumlah).toBe(2);
+    });
+
+    it('FR-20: Uang diterima melebihi total → LUNAS dengan kembalian', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          uangDiterima: 50000,
+          items: [{ productId: testProductId, jumlah: 2 }], // total 20.000
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.total).toBe('20000');
+      expect(res.body.data.uangDiterima).toBe('50000');
+      expect(res.body.data.kembalian).toBe('30000');
+      expect(res.body.data.statusPembayaran).toBe('LUNAS');
+      expect(res.body.data.sisaSaldoUtang).toBeNull();
+    });
+
+    it('FR-20: Uang diterima kurang dari total → UTANG dengan sisa saldo', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          uangDiterima: 10000,
+          namaPembeli: 'Siti',
+          items: [{ productId: testProductId, jumlah: 3 }], // total 30.000
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.total).toBe('30000');
+      expect(res.body.data.uangDiterima).toBe('10000');
+      expect(res.body.data.kembalian).toBeNull();
+      expect(res.body.data.statusPembayaran).toBe('UTANG');
+      expect(res.body.data.sisaSaldoUtang).toBe('20000');
     });
 
     it('AC-05: Berhasil membuat transaksi UTANG dengan nama dan nomor HP', async () => {
@@ -91,7 +132,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'UTANG',
+          uangDiterima: 0,
           namaPembeli: 'Siti',
           noHpPembeli: '081234567890',
           items: [
@@ -108,6 +149,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
       expect(res.body.data.namaPembeli).toBe('Siti');
       expect(res.body.data.noHpPembeli).toBe('081234567890');
       expect(res.body.data.total).toBe('30000');
+      expect(res.body.data.uangDiterima).toBe('0');
       expect(res.body.data.sisaSaldoUtang).toBe('30000');
     });
 
@@ -116,7 +158,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'UTANG',
+          uangDiterima: 0,
           noHpPembeli: '081234567890',
           items: [
             {
@@ -136,7 +178,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'UTANG',
+          uangDiterima: 0,
           namaPembeli: 'Budi Tanpa HP',
           items: [
             {
@@ -158,7 +200,8 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 0,
+          namaPembeli: 'Stok Kurang',
           items: [
             {
               productId: testProductId,
@@ -177,7 +220,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 20000,
           items: [],
         });
 
@@ -185,9 +228,36 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
       expect(res.body.success).toBe(false);
     });
 
+    it('Transaksi tanpa uangDiterima ditolak', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          items: [{ productId: testProductId, jumlah: 1 }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('uangDiterima negatif ditolak', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          uangDiterima: -1,
+          items: [{ productId: testProductId, jumlah: 1 }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('Transaksi tanpa autentikasi ditolak', async () => {
       const res = await request(app).post('/api/v1/transactions').send({
-        statusPembayaran: 'LUNAS',
+        uangDiterima: 20000,
         items: [
           {
             productId: testProductId,
@@ -210,7 +280,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         });
       transaction1Id = res1.body.data.id;
@@ -219,7 +289,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'UTANG',
+          uangDiterima: 0,
           namaPembeli: 'Test Buyer',
           noHpPembeli: '081234567890',
           items: [{ productId: testProductId, jumlah: 2 }],
@@ -296,7 +366,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         });
       transactionId = res.body.data.id;
@@ -339,7 +409,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         });
       const transactionId = createRes.body.data.id;
@@ -374,7 +444,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         });
       const transactionId = createRes.body.data.id;
@@ -406,7 +476,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          statusPembayaran: 'LUNAS',
+          uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         });
 

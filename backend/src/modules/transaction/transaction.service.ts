@@ -3,8 +3,12 @@
  * Business logic untuk transaksi penjualan.
  * BR-05: Stok tidak boleh negatif saat transaksi
  * BR-07: Total dihitung dengan Decimal untuk precision
- * BR-08: UTANG wajib nama pembeli (noHpPembeli opsional)
+ * BR-08: Transaksi dengan uang diterima < total (UTANG) wajib nama pembeli
  * BR-13: Void hanya dalam window waktu yang ditentukan (default: hari yang sama)
+ *
+ * Status pembayaran diturunkan dari `uangDiterima` (bukan dipilih langsung):
+ *   uangDiterima >= total -> LUNAS, kembalian = uangDiterima - total
+ *   uangDiterima <  total -> UTANG, sisaSaldoUtang = total - uangDiterima
  */
 
 import { Prisma, TransactionStatus, PaymentStatus } from '@prisma/client';
@@ -86,15 +90,6 @@ export const createTransaction = async (
     throw new ValidationError('Transaksi harus memiliki minimal 1 item');
   }
 
-  // BR-08: Validasi UTANG wajib nama pembeli (noHpPembeli opsional)
-  if (input.statusPembayaran === PaymentStatus.UTANG) {
-    if (!input.namaPembeli?.trim()) {
-      throw new ValidationError(
-        'Nama pembeli wajib diisi untuk transaksi UTANG',
-      );
-    }
-  }
-
   // Atomic transaction untuk insert + stock decrement
   const transaction = await prisma.$transaction(async (tx) => {
     // 1. Fetch products dan validasi
@@ -163,21 +158,39 @@ export const createTransaction = async (
       });
     }
 
-    // 3. Create transaction
+    // 3. Turunkan status pembayaran dari uang yang diterima (BR-08)
+    //    Dibandingkan dengan Decimal agar tidak ada galat pembulatan float.
+    const uangDiterima = new Decimal(input.uangDiterima);
+    const isLunas = uangDiterima.gte(total);
+
+    const statusPembayaran = isLunas ? PaymentStatus.LUNAS : PaymentStatus.UTANG;
+    const kembalian = isLunas ? uangDiterima.sub(total) : null;
+    const sisaSaldoUtang = isLunas ? null : total.sub(uangDiterima);
+
+    // BR-08: Transaksi yang belum lunas wajib menyimpan nama pembeli
+    // (noHpPembeli opsional) agar dapat ditelusuri.
+    if (!isLunas && !input.namaPembeli?.trim()) {
+      throw new ValidationError(
+        'Nama pembeli wajib diisi karena uang diterima kurang dari total transaksi (transaksi Utang)',
+      );
+    }
+
+    // 4. Create transaction
     const newTransaction = await tx.transaction.create({
       data: {
         total,
-        statusPembayaran: input.statusPembayaran,
+        uangDiterima,
+        kembalian,
+        statusPembayaran,
         statusTransaksi: TransactionStatus.AKTIF,
         namaPembeli: input.namaPembeli || null,
         noHpPembeli: input.noHpPembeli || null,
-        sisaSaldoUtang:
-          input.statusPembayaran === PaymentStatus.UTANG ? total : null,
+        sisaSaldoUtang,
         dibuatOlehId: userId,
       },
     });
 
-    // 4. Insert detail transactions
+    // 5. Insert detail transactions
     for (const detail of detailTransactionData) {
       detail.transactionId = newTransaction.id;
     }
@@ -185,7 +198,7 @@ export const createTransaction = async (
       data: detailTransactionData,
     });
 
-    // 5. Decrement stock atomically dengan kondisi WHERE untuk concurrency safety
+    // 6. Decrement stock atomically dengan kondisi WHERE untuk concurrency safety
     for (const item of itemsWithData) {
       const updateResult = await tx.product.updateMany({
         where: {
@@ -205,7 +218,7 @@ export const createTransaction = async (
       }
     }
 
-    // 6. Fetch transaction dengan relasi untuk response
+    // 7. Fetch transaction dengan relasi untuk response
     const createdTransaction = await tx.transaction.findUnique({
       where: { id: newTransaction.id },
       include: {

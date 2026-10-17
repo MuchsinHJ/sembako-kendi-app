@@ -7,11 +7,31 @@
 import { z } from 'zod';
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
 
+/**
+ * Nilai uang pada request: number >= 0 dengan maksimal 2 angka desimal
+ * (sesuai kolom Decimal(12,2)).
+ */
+const moneyInput = (label: string) =>
+  z
+    .number()
+    .min(0, `${label} tidak boleh negatif`)
+    .refine(
+      (val) => {
+        const decimalPart = val.toString().split('.')[1];
+        return !decimalPart || decimalPart.length <= 2;
+      },
+      { message: `${label} maksimal 2 angka desimal` },
+    );
+
 // ─── POST /transactions (create) ──────────────────────────────────────────────
 
 export const createTransactionSchema = {
   body: z.object({
-    statusPembayaran: z.nativeEnum(PaymentStatus),
+    // Uang tunai yang diserahkan pembeli. Status pembayaran diturunkan dari
+    // perbandingan nilai ini dengan total transaksi (lihat transaction.service):
+    //   uangDiterima >= total -> LUNAS (kembalian = uangDiterima - total)
+    //   uangDiterima <  total -> UTANG (sisaSaldoUtang = total - uangDiterima)
+    uangDiterima: moneyInput('Uang diterima'),
     namaPembeli: z.string().min(1).max(255).optional(),
     noHpPembeli: z.string().max(20).optional().nullable(),
     items: z
@@ -22,20 +42,7 @@ export const createTransactionSchema = {
         }),
       )
       .min(1, 'Transaksi harus memiliki minimal 1 item'),
-  })
-    .refine(
-      (data) => {
-        // BR-08: Transaksi UTANG wajib memiliki namaPembeli (noHpPembeli opsional)
-        if (data.statusPembayaran === 'UTANG') {
-          return !!data.namaPembeli && data.namaPembeli.trim().length > 0;
-        }
-        return true;
-      },
-      {
-        message: 'Nama pembeli wajib diisi untuk transaksi UTANG',
-        path: ['namaPembeli'],
-      },
-    )
+  }),
 };
 
 // ─── GET /transactions (list) ─────────────────────────────────────────────────

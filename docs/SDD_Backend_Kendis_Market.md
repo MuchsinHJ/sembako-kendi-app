@@ -116,6 +116,7 @@ Client
       → transaction.service.createTransaction()
           → cek stok tiap item (BR-05)
           → hitung total (BR-07)
+          → turunkan status pembayaran dari uangDiterima vs total (BR-08)
           → jalankan dalam DB transaction (Prisma $transaction):
               - insert Transaksi
               - insert Detail_Transaksi (snapshot harga, BR-10)
@@ -340,6 +341,8 @@ model Transaction {
   id                 String   @id @default(uuid())
   tanggal            DateTime @default(now())
   total              Decimal  @db.Decimal(12, 2)
+  uangDiterima       Decimal? @db.Decimal(12, 2)
+  kembalian          Decimal? @db.Decimal(12, 2)
   statusPembayaran   PaymentStatus
   statusTransaksi    TransactionStatus @default(AKTIF)
   namaPembeli        String?
@@ -367,6 +370,12 @@ enum TransactionStatus {
   AKTIF
   DIBATALKAN
 }
+
+// Catatan: `uangDiterima` dan `kembalian` nullable hanya untuk kompatibilitas
+// data historis sebelum revisi ini. Untuk transaksi baru, `uangDiterima` selalu
+// diisi dan `statusPembayaran` diturunkan oleh service layer:
+//   uangDiterima >= total → LUNAS, kembalian = uangDiterima − total
+//   uangDiterima <  total → UTANG, sisaSaldoUtang = total − uangDiterima
 
 model DetailTransaction {
   id                  String   @id @default(uuid())
@@ -413,6 +422,8 @@ model PaymentHistory {
 | `stok >= 0` | Aplikasi (Zod/service) + `CHECK` constraint DB | BR-04 |
 | `jumlah > 0` pada `DetailTransaction` | Aplikasi (Zod) + `CHECK` constraint DB | BR-05 |
 | `email` unik pada `User` | `@unique` Prisma | FR-01 |
+| `uangDiterima >= 0`, `kembalian >= 0` | Aplikasi (Zod) + `CHECK` constraint DB | BR-07, BR-16 |
+| `statusPembayaran`, `kembalian`, dan `sisaSaldoUtang` konsisten dengan `uangDiterima` vs `total` | Service layer (satu-satunya penulis field tersebut saat create) | BR-08 |
 | `namaPembeli` wajib jika `statusPembayaran = UTANG` (`noHpPembeli` opsional) | Validasi service layer (tidak feasible sebagai DB constraint sederhana) | BR-08 |
 | `jumlahBayar <= sisaSaldoUtang` saat insert | Validasi service layer dalam DB transaction | BR-14 |
 | Produk dengan `DetailTransaction` terkait tidak dapat di-`DELETE`, hanya `UPDATE status = NONAKTIF` | Service layer (cek relasi sebelum delete) | BR-12 |
@@ -433,7 +444,7 @@ Operasi berikut **wajib** dibungkus `prisma.$transaction([...])` atau interactiv
 
 | Operasi | Langkah yang harus atomik |
 |---|---|
-| Membuat transaksi baru | Insert `Transaction` + insert N `DetailTransaction` + update stok tiap `Product` (decrement) |
+| Membuat transaksi baru | Insert `Transaction` (termasuk `uangDiterima`, `kembalian`, `statusPembayaran`, `sisaSaldoUtang` hasil turunan) + insert N `DetailTransaction` + update stok tiap `Product` (decrement) |
 | Void transaksi | Update `Transaction.statusTransaksi = DIBATALKAN` + update stok tiap `Product` (increment kembali) |
 | Mencatat pelunasan | Insert `PaymentHistory` + update `Transaction.sisaSaldoUtang` + kemungkinan update `Transaction.statusPembayaran = LUNAS` |
 
@@ -511,8 +522,29 @@ Untuk modul Media, karena operasi melibatkan **dua sistem berbeda** (PostgreSQL 
 |---|---|---|---|
 | GET | `/transactions` | List riwayat transaksi (filter periode, status) | FR-24 |
 | GET | `/transactions/:id` | Detail satu transaksi beserta item & riwayat pembayaran | FR-24 |
-| POST | `/transactions` | Membuat transaksi baru (Lunas/Utang) | FR-16–FR-23 |
+| POST | `/transactions` | Membuat transaksi baru; status Lunas/Utang diturunkan dari `uangDiterima` | FR-16–FR-23 |
 | POST | `/transactions/:id/void` | Membatalkan transaksi (dalam batas waktu) | FR-25–FR-29 |
+
+**Request body `POST /transactions`:**
+```json
+{
+  "uangDiterima": 50000,
+  "namaPembeli": "Ibu Siti",
+  "noHpPembeli": "081234567890",
+  "items": [{ "productId": "uuid", "jumlah": 2 }]
+}
+```
+
+Aturan penurunan status pembayaran (diterapkan di `transaction.service.createTransaction` setelah total dihitung, semuanya dengan `Prisma.Decimal`):
+
+| Kondisi | `statusPembayaran` | `kembalian` | `sisaSaldoUtang` | `namaPembeli` |
+|---|---|---|---|---|
+| `uangDiterima >= total` | `LUNAS` | `uangDiterima − total` | `null` | opsional |
+| `uangDiterima < total` | `UTANG` | `null` | `total − uangDiterima` | **wajib** (BR-08) |
+
+- `uangDiterima` adalah uang tunai yang diserahkan pembeli saat transaksi; nilainya disimpan apa adanya (termasuk kelebihan bayar) agar struk dapat menampilkan kembalian.
+- Uang muka pada transaksi Utang disimpan pada kolom `Transaction.uangDiterima`/`sisaSaldoUtang`, **bukan** sebagai entri `PaymentHistory` pertama. Konsekuensi yang disengaja: transaksi Utang yang baru dibuat tetap dapat di-void pada hari yang sama (BR-13), karena aturan "tidak boleh void jika sudah ada cicilan" hanya memeriksa `PaymentHistory`.
+- Respons `POST/GET /transactions` menyertakan `uangDiterima` dan `kembalian` sebagai string desimal (atau `null`), konsisten dengan field uang lain (Bagian 5.1).
 
 ### 5.6 Debt API
 | Method | Endpoint | Deskripsi | Referensi |
@@ -715,7 +747,7 @@ Karena tidak menggunakan container, environment server (versi Node, versi OS, li
 | FR-01–FR-05, NFR-05, NFR-06 | Authentication (3.2) | `/auth/*` (5.2) | Unit: auth.service; API: login flow |
 | FR-06–FR-15, BR-03, BR-04, BR-12, BR-15 | Product & Stock (3.4, 3.5) | `/products/*` (5.3, 5.4) | Unit: product.service; API: AC-01, AC-02, AC-03 |
 | Perluasan FR-07/FR-09 (field `foto_url`, SRS 7.2) | Media & Image Upload (3.6) | `POST/DELETE /products/:id/photo` (5.3) | Unit: media.service (mock S3); API: upload valid/invalid file — direkomendasikan ditambahkan sebagai AC-18 pada revisi SRS berikutnya |
-| FR-16–FR-24, BR-05–BR-10 | Transaction (3.7) | `POST /transactions` (5.5) | Integration: AC-04, AC-05, AC-06 |
+| FR-16–FR-24, BR-05–BR-10 | Transaction (3.7) | `POST /transactions` (5.5) | Unit: `transaction.service.test.ts`; API: AC-04, AC-05, AC-06, FR-20 (turunan status dari `uangDiterima`) |
 | FR-25–FR-29, BR-13 | Transaction — Void (3.7) | `POST /transactions/:id/void` (5.5) | Integration: AC-07, AC-08, AC-09 |
 | FR-30–FR-34, BR-14 | Debt/Installment (3.8) | `/debts/*` (5.6) | Integration: AC-10, AC-11, AC-12 |
 | FR-43–FR-45 | Dashboard (3.9) | `/dashboard/summary` (5.7) | API: AC-17 |
@@ -776,6 +808,14 @@ Karena tidak menggunakan container, environment server (versi Node, versi OS, li
 **Keputusan:** Seluruh foto produk dikonversi ke format **WebP** setelah diproses Sharp, terlepas dari format asli yang diunggah pengguna (JPEG/PNG).
 **Alternatif dipertimbangkan:** Mempertahankan format asli file yang diunggah pengguna.
 **Alasan:** WebP secara konsisten menghasilkan ukuran file lebih kecil dibanding JPEG/PNG pada kualitas visual yang setara, langsung mendukung tujuan optimasi ukuran gambar serta NFR-01 (waktu muat halaman katalog produk pada koneksi mobile). Dukungan WebP sudah luas pada browser modern (selaras NFR-08).
+
+### 11.9 Status Pembayaran Diturunkan dari Uang Diterima
+**Keputusan:** Client **tidak** lagi mengirim `statusPembayaran`; client mengirim `uangDiterima` (uang tunai yang diserahkan pembeli) dan backend menurunkan `statusPembayaran`, `kembalian`, serta `sisaSaldoUtang` dari perbandingan dengan `total` (lihat 5.5).
+**Alternatif dipertimbangkan:**
+1. Tetap meminta client memilih `LUNAS`/`UTANG` secara eksplisit (desain awal SRS FR-20).
+2. Menyimpan uang muka transaksi Utang sebagai entri `PaymentHistory` pertama.
+3. Menurunkan status dari `uangDiterima` dan menyimpan uang muka pada kolom `Transaction` (**dipilih**).
+**Alasan:** Pada praktik kasir, status lunas/utang bukan input terpisah melainkan konsekuensi dari uang yang diterima; menurunkannya menghilangkan kemungkinan data tidak konsisten (mis. status LUNAS dengan uang diterima kurang dari total). Opsi 2 ditolak karena akan mengunci transaksi dari void pada hari yang sama (BR-13 menolak void bila sudah ada `PaymentHistory`), padahal koreksi salah input tetap dibutuhkan. Konsekuensi yang diterima: `uangDiterima`/`kembalian` bersifat nullable di DB demi data historis, dan UI tetap perlu menampilkan kedua nilai tersebut agar kasir dapat menyerahkan kembalian.
 
 ---
 

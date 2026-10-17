@@ -526,14 +526,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"statusPembayaran\": \"LUNAS\",\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 2\n    }\n  ]\n}"
+              "raw": "{\n  \"uangDiterima\": 20000,\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 2\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/transactions",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "transactions"]
             },
-            "description": "Membuat transaksi LUNAS\n\nValidasi:\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- Otomatis menghitung total (BR-07)\n- Snapshot harga produk (BR-10)\n- Update stok (BR-09, BR-04)\n\nReferensi: FR-16–FR-23"
+            "description": "Membuat transaksi LUNAS\n\nValidasi:\n- uangDiterima >= total -> LUNAS, kembalian = uangDiterima - total (FR-20)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- Otomatis menghitung total (BR-07)\n- Snapshot harga produk (BR-10)\n- Update stok (BR-09, BR-04)\n\nReferensi: FR-16–FR-23"
           },
           "response": []
         },
@@ -566,14 +566,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"statusPembayaran\": \"UTANG\",\n  \"namaPembeli\": \"Ibu Siti\",\n  \"noHpPembeli\": \"081234567890\",\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 3\n    }\n  ]\n}"
+              "raw": "{\n  \"uangDiterima\": 0,\n  \"namaPembeli\": \"Ibu Siti\",\n  \"noHpPembeli\": \"081234567890\",\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 3\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/transactions",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "transactions"]
             },
-            "description": "Membuat transaksi UTANG\n\nValidasi:\n- namaPembeli wajib diisi, noHpPembeli opsional (BR-08)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- sisaSaldoUtang = total\n\nReferensi: FR-16–FR-23, BR-08"
+            "description": "Membuat transaksi UTANG\n\nValidasi:\n- uangDiterima < total -> UTANG, sisaSaldoUtang = total - uangDiterima (FR-20)\n- namaPembeli wajib diisi, noHpPembeli opsional (BR-08)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n\nReferensi: FR-16–FR-23, BR-08"
           },
           "response": []
         },

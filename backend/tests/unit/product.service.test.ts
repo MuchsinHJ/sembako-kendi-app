@@ -144,6 +144,8 @@ describe('Product Service', () => {
           total: new Prisma.Decimal('10000'),
           statusTransaksi: 'AKTIF',
           statusPembayaran: 'LUNAS',
+          uangDiterima: new Prisma.Decimal('10000'),
+          kembalian: new Prisma.Decimal('0'),
           items: {
             create: {
               productId: product.id,

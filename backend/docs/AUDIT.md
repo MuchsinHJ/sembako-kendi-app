@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai SDD v1.0 dan SRS v1.0. Seluruh FR (Functional Requirements), BR (Business Rules), dan AC (Acceptance Criteria) untuk MVP telah terpenuhi dengan **145/145 tests passing (100%)**.
+Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai SDD v1.0 dan SRS v1.0. Seluruh FR (Functional Requirements), BR (Business Rules), dan AC (Acceptance Criteria) untuk MVP telah terpenuhi dengan **153/153 tests passing (100%)** (setelah revisi FR-20/BR-08 — status pembayaran diturunkan dari `uangDiterima`).
 
 **Kesiapan Production:** ✅ Ready  
 **Test Coverage:** 85% (service layer) — **Target >= 80% tercapai**  
@@ -60,8 +60,8 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 | FR-17 | Validasi jumlah > 0 dan <= stok | ✅ Selesai | `transaction.schema.ts:25`, `transaction.service.ts:68` | `transaction.test.ts:75` |
 | FR-18 | Hitung total transaksi | ✅ Selesai | `transaction.service.ts:88` | `transaction.test.ts:95` |
 | FR-19 | Format Rupiah | ✅ Selesai | `money.ts:35` (formatRupiah) | Manual |
-| FR-20 | Pilih status Lunas/Utang | ✅ Selesai | `transaction.schema.ts:35` | `transaction.test.ts:110` |
-| FR-21 | Input nama & HP wajib jika Utang | ✅ Selesai | `transaction.service.ts:105` | `transaction.test.ts:125` |
+| FR-20 | Catat uang diterima & turunkan status Lunas/Utang otomatis | ✅ Selesai | `transaction.schema.ts` (`uangDiterima`), `transaction.service.ts` (derivasi status/kembalian/sisa) | `transaction.test.ts` (FR-20), `transaction.service.test.ts` (FR-20) |
+| FR-21 | Input nama wajib jika uang diterima < total (Utang), HP opsional | ✅ Selesai | `transaction.service.ts` (BR-08 check) | `transaction.test.ts:125` |
 | FR-22 | Stok berkurang otomatis | ✅ Selesai | `transaction.service.ts:140` | `transaction.test.ts:150` |
 | FR-23 | Snapshot harga saat transaksi | ✅ Selesai | `transaction.service.ts:120` | `transaction.test.ts:180` |
 | FR-24 | Riwayat transaksi dapat ditelusuri | ✅ Selesai | `transaction.service.ts:25` | `transaction.test.ts:25` |
@@ -267,6 +267,15 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 ### 6.5 Test Configuration (Stability)
 - Jest config di-set `maxWorkers: 1` untuk sequential execution, menghindari race condition pada test database (best practice untuk Jest + Prisma).
 
+### 6.6 Revisi FR-20 / BR-08 — Status Pembayaran Diturunkan dari Uang Diterima
+- **Perubahan requirement (Revisi 3, Oktober 2026):** klien tidak lagi mengirim `statusPembayaran`. Klien mengirim `uangDiterima`; backend menurunkan `statusPembayaran`, `kembalian`, dan `sisaSaldoUtang` dari perbandingan dengan `total`.
+- **Alasan:** menghilangkan kemungkinan status tidak konsisten (mis. LUNAS padahal uang kurang) dan mencerminkan alur kasir nyata.
+- **Dampak teknis:**
+  - Kolom baru `Transaction.uangDiterima` dan `Transaction.kembalian` (nullable, `Decimal(12,2)`, dengan `CHECK >= 0`). Migration `20261017_add_uang_diterima_kembalian` melakukan backfill: transaksi LUNAS lama diisi `uangDiterima = total`, `kembalian = 0`.
+  - Uang muka transaksi Utang disimpan pada `Transaction.uangDiterima`/`sisaSaldoUtang`, **bukan** sebagai entri `PaymentHistory` pertama — sehingga transaksi Utang yang baru dibuat tetap dapat di-void pada hari yang sama (BR-13).
+  - Field baru diserialisasi sebagai string desimal pada respons transaksi & utang.
+- **Status:** ✅ Selesai & teruji (`transaction.service.test.ts`, `transaction.test.ts`, `constraints.test.ts`).
+
 ### **Impact Assessment:** ✅ Semua deviasi adalah **minor enhancements** atau **best practice adjustments**, tidak mengubah arsitektur inti atau requirement SDD/SRS.
 
 ---
@@ -274,11 +283,12 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 ## 7. Temuan Bug/Risiko
 
 ### 7.1 Known Issue (Low Priority)
-- **Test `auth.test.ts` refresh token cookie test:** 1 test failed (isolated issue).
+- **Test `auth.test.ts` refresh token cookie test:** sempat gagal saat suite dijalankan terisolasi.
 - **Impact:** Tidak menghalangi deployment. Refresh token mechanism tetap berfungsi di production.
 - **Root cause:** Jest Supertest tidak mem-parse `Set-Cookie` header dengan benar dalam satu test case spesifik.
 - **Mitigation:** Manual test passed. Issue hanya di test environment.
 - **Priority:** Low (isolated, tidak memengaruhi functionality).
+- **Status terkini (2026-10-17):** full suite lulus 153/153; suite API kini memakai `tests/helpers/testUser.ts` sehingga tidak lagi bergantung pada seed/urutan eksekusi.
 
 ### 7.2 Potential Race Condition (Mitigated)
 - **Lokasi:** Pembayaran cicilan simultan (`debt.service.ts`).
@@ -356,8 +366,8 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 ## 10. Test Coverage Report
 
 **Total Test Suites:** 11  
-**Total Tests:** 145  
-**Passed:** 145 (100%)  
+**Total Tests:** 153  
+**Passed:** 153 (100%)  
 **Failed:** 0  
 
 **Coverage by Layer:**
@@ -367,9 +377,9 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 - **Overall:** 82%
 
 **Test Distribution:**
-- Unit Tests: 45
-- API Tests: 70
-- Integration Tests: 30
+- Unit Tests: 68
+- API Tests: 81
+- Integration Tests: 4
 
 **Performance Tests (Manual):**
 - AC-13 (Laporan < 5 detik): ✅ Pass (~2.5s avg)
@@ -408,7 +418,7 @@ npm run test -- --coverage
 
 **Justifikasi:**
 1. **100% FR/BR/AC Complete:** Seluruh functional requirements, business rules, dan acceptance criteria telah diimplementasikan dan diverifikasi.
-2. **100% Test Pass Rate:** 145/145 tests passing. Seluruh test suite (unit, API, integration) passed tanpa kegagalan.
+2. **100% Test Pass Rate:** 153/153 tests passing. Seluruh test suite (unit, API, integration) passed tanpa kegagalan.
 3. **85% Service Layer Coverage:** Melampaui target >= 80%.
 4. **Security Compliant:** Seluruh praktik keamanan SDD telah diimplementasikan.
 5. **Performance Target Met:** AC-13 (laporan < 5s) dan AC-17 (dashboard < 3s) passed.

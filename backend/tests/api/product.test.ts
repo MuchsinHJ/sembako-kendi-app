@@ -7,15 +7,19 @@ import request from 'supertest';
 import { Prisma } from '@prisma/client';
 import app from '../../src/app.js';
 import { prisma } from '../../src/config/db.js';
+import { TEST_USER, ensureTestUser } from '../helpers/testUser.js';
 
 let authToken: string;
 let testUserId: string;
 
 beforeAll(async () => {
+  // Pastikan user seed tersedia (tidak bergantung pada urutan suite lain)
+  await ensureTestUser();
+
   // Login untuk mendapat token
   const loginRes = await request(app).post('/api/v1/auth/login').send({
-    email: 'test@example.com',
-    password: 'password123',
+    email: TEST_USER.email,
+    password: TEST_USER.password,
   });
 
   authToken = loginRes.body.data.accessToken;
@@ -175,6 +179,8 @@ describe('Product API (AC-01, AC-02, AC-03)', () => {
           total: new Prisma.Decimal('10000'),
           statusTransaksi: 'AKTIF',
           statusPembayaran: 'LUNAS',
+          uangDiterima: new Prisma.Decimal('10000'),
+          kembalian: new Prisma.Decimal('0'),
           items: {
             create: {
               productId: prodId,
