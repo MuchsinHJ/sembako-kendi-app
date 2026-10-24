@@ -1,16 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Kendi's Market — .gitignore
+#
+# Prinsip: yang masuk repo hanya kode sumber, konfigurasi proyek, migrasi,
+# test, koleksi Postman, dan dokumen produk (PRD/SRS/SDD). Artefak build,
+# rahasia, file sementara, dan dokumen khusus development diabaikan.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Dependencies ────────────────────────────────────────────────────────────
 node_modules/
+
+# ── Build output ────────────────────────────────────────────────────────────
+dist/
+build/
+*.tsbuildinfo
+
+# ── Environment & secrets ───────────────────────────────────────────────────
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
 
-dist/
-build/
+# ── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
+# ── Test & coverage ─────────────────────────────────────────────────────────
 coverage/
+.nyc_output/
+test-results/
+junit.xml
 
+# ── Runtime / artefak lokal ─────────────────────────────────────────────────
+uploads/
+tmp/
+temp/
+.cache/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# ── Dokumen & berkas khusus development (tidak untuk repo) ──────────────────
+.claude/
+AGENTS.md
+PROMPTS.md
+PROMPT_*.md
+tasks/
+notebooks/
+*.backup.md
+*.bak
+*.old
+
+# ── Postman: environment pribadi ────────────────────────────────────────────
+*.postman_environment.local.json
+postman/.postman/
+
+# ── IDE & OS ────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
-
-*.log
-
-.claude/
+.DS_Store
+Thumbs.db
+desktop.ini
