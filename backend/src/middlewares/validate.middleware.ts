@@ -1,5 +1,5 @@
 /**
- * middlewares/validate.ts
+ * middlewares/validate.middleware.ts
  * Middleware generik untuk validasi body / query / params menggunakan Zod (SDD §6.4).
  *
  * Penggunaan:

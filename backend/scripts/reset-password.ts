@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { config } from '../src/config/env.js';
 
 const prisma = new PrismaClient();
 
@@ -8,7 +9,9 @@ async function main() {
   const newPassword = process.argv[3];
 
   if (!email || !newPassword) {
-    console.error('Usage: npm run ts-node-dev scripts/reset-password.ts <email> <newPassword>');
+    console.error(
+      'Usage: npm run reset-password -- <email> <newPassword>',
+    );
     process.exit(1);
   }
 
@@ -18,7 +21,8 @@ async function main() {
     process.exit(1);
   }
 
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  // Salt rounds mengikuti konfigurasi tervalidasi (SDD §9.2)
+  const passwordHash = await bcrypt.hash(newPassword, config.BCRYPT_SALT_ROUNDS);
 
   await prisma.user.update({
     where: { email },

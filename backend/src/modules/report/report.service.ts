@@ -3,24 +3,28 @@
  * Business logic untuk laporan & tren produk (Fase 9).
  *
  * Referensi: SDD §3.10; SRS FR-35–FR-42, BR-11, BR-16, AC-13–AC-16
+ *
+ * Catatan konvensi: seluruh nilai uang pada response JSON dikirim sebagai
+ * STRING desimal (2 angka desimal) — lihat utils/money.ts & SDD §5.1.
  */
 
-import { prisma } from "../../config/db.js";
-import type { ReportQuery } from "./report.schema.js";
 import { Prisma } from "@prisma/client";
+import { prisma } from "../../config/db.js";
+import { decimalToString } from "../../utils/money.js";
+import type { ReportQuery } from "./report.schema.js";
 
 interface SalesReportData {
   periode: {
     start: string;
     end: string;
   };
-  omzet: number;
-  profit: number;
+  omzet: string;
+  profit: string;
   transactionCount: number;
   transactions: Array<{
     id: string;
     tanggal: Date;
-    total: number;
+    total: string;
     statusPembayaran: string;
     namaPembeli: string | null;
   }>;
@@ -31,20 +35,20 @@ interface DebtReportData {
     start: string;
     end: string;
   };
-  totalSaldoUtang: number;
+  totalSaldoUtang: string;
   debtCount: number;
   debts: Array<{
     id: string;
     tanggal: Date;
-    total: number;
+    total: string;
     namaPembeli: string;
     noHpPembeli: string | null;
-    sisaSaldoUtang: number;
+    sisaSaldoUtang: string;
     payments: Array<{
       id: string;
       tanggalBayar: Date;
-      jumlahBayar: number;
-      saldoSetelahBayar: number;
+      jumlahBayar: string;
+      saldoSetelahBayar: string;
     }>;
   }>;
 }
@@ -59,7 +63,7 @@ interface ProductTrendData {
     namaProduk: string;
     kategori: string;
     totalQuantitySold: number;
-    totalRevenue: number;
+    totalRevenue: string;
   }>;
 }
 
@@ -94,19 +98,19 @@ export async function getSalesReport(
     orderBy: { tanggal: "desc" },
   });
 
-  // Transform Decimal to number
+  // Transform Decimal to string (konvensi response JSON)
   const transactions = transactionsRaw.map((t) => ({
     id: t.id,
     tanggal: t.tanggal,
-    total: Number(t.total),
+    total: decimalToString(t.total) ?? "0.00",
     statusPembayaran: t.statusPembayaran,
     namaPembeli: t.namaPembeli,
   }));
 
-  // Hitung omzet = SUM(total)
-  const omzet = transactions.reduce(
-    (sum, t) => sum + Number(t.total),
-    0,
+  // Hitung omzet = SUM(total) dengan Decimal agar presisi terjaga
+  const omzetDecimal = transactionsRaw.reduce(
+    (sum, t) => sum.add(t.total),
+    new Prisma.Decimal(0),
   );
 
   // Hitung profit dari DetailTransaction
@@ -127,20 +131,20 @@ export async function getSalesReport(
     },
   });
 
-  const profit = details.reduce((sum, item) => {
-    const itemProfit =
-      (Number(item.hargaJualSnapshot) - Number(item.hargaModalSnapshot)) *
-      item.jumlah;
-    return sum + itemProfit;
-  }, 0);
+  const profitDecimal = details.reduce((sum, item) => {
+    const itemProfit = item.hargaJualSnapshot
+      .sub(item.hargaModalSnapshot)
+      .mul(item.jumlah);
+    return sum.add(itemProfit);
+  }, new Prisma.Decimal(0));
 
   return {
     periode: {
       start: query.startDate,
       end: query.endDate,
     },
-    omzet,
-    profit,
+    omzet: decimalToString(omzetDecimal) ?? "0.00",
+    profit: decimalToString(profitDecimal) ?? "0.00",
     transactionCount: transactions.length,
     transactions,
   };
@@ -190,25 +194,25 @@ export async function getDebtsReport(
     orderBy: { tanggal: "desc" },
   });
 
-  // Hitung total saldo utang
-  const totalSaldoUtang = debts.reduce(
-    (sum, d) => sum + Number(d.sisaSaldoUtang),
-    0,
+  // Hitung total saldo utang dengan Decimal
+  const totalSaldoUtangDecimal = debts.reduce(
+    (sum, d) => sum.add(d.sisaSaldoUtang ?? 0),
+    new Prisma.Decimal(0),
   );
 
   // Transform data
   const transformedDebts = debts.map((d) => ({
     id: d.id,
     tanggal: d.tanggal,
-    total: Number(d.total),
+    total: decimalToString(d.total) ?? "0.00",
     namaPembeli: d.namaPembeli!,
     noHpPembeli: d.noHpPembeli,
-    sisaSaldoUtang: Number(d.sisaSaldoUtang),
+    sisaSaldoUtang: decimalToString(d.sisaSaldoUtang) ?? "0.00",
     payments: d.payments.map((p) => ({
       id: p.id,
       tanggalBayar: p.tanggalBayar,
-      jumlahBayar: Number(p.jumlahBayar),
-      saldoSetelahBayar: Number(p.saldoSetelahBayar),
+      jumlahBayar: decimalToString(p.jumlahBayar) ?? "0.00",
+      saldoSetelahBayar: decimalToString(p.saldoSetelahBayar) ?? "0.00",
     })),
   }));
 
@@ -217,7 +221,7 @@ export async function getDebtsReport(
       start: query.startDate,
       end: query.endDate,
     },
-    totalSaldoUtang,
+    totalSaldoUtang: decimalToString(totalSaldoUtangDecimal) ?? "0.00",
     debtCount: debts.length,
     debts: transformedDebts,
   };
@@ -236,7 +240,6 @@ export async function getProductTrend(
   const end = new Date(query.endDate);
 
   // Aggregate per produk: SUM(jumlah), SUM(subtotal)
-  // Menggunakan groupBy Prisma
   const trendData = await prisma.detailTransaction.groupBy({
     by: ["productId"],
     where: {
@@ -288,7 +291,7 @@ export async function getProductTrend(
         namaProduk: product.nama,
         kategori: product.kategori,
         totalQuantitySold: t._sum.jumlah ?? 0,
-        totalRevenue: Number(t._sum.subtotal ?? 0),
+        totalRevenue: decimalToString(t._sum.subtotal) ?? "0.00",
       };
     })
     .filter((p) => p !== null)

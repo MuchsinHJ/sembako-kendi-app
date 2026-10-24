@@ -7,8 +7,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { prisma } from '../../src/config/db.js';
-import { Decimal } from '@prisma/client/runtime/library';
-import { PaymentStatus, TransactionStatus } from '@prisma/client';
 import { TEST_USER, ensureTestUser } from '../helpers/testUser.js';
 
 let authToken: string;
@@ -113,12 +111,18 @@ describe('Debt API (AC-10, AC-11, AC-12)', () => {
 
       // Verify all are UTANG and AKTIF
       expect(Array.isArray(res.body.data.data)).toBe(true);
-      res.body.data.data.forEach((transaction: any) => {
-        expect(transaction.statusPembayaran).toBe('UTANG');
-        expect(transaction.statusTransaksi).toBe('AKTIF');
-        expect(transaction.sisaSaldoUtang).not.toBeNull();
-        expect(parseFloat(transaction.sisaSaldoUtang)).toBeGreaterThan(0);
-      });
+      res.body.data.data.forEach(
+        (transaction: {
+          statusPembayaran: string;
+          statusTransaksi: string;
+          sisaSaldoUtang: string | null;
+        }) => {
+          expect(transaction.statusPembayaran).toBe('UTANG');
+          expect(transaction.statusTransaksi).toBe('AKTIF');
+          expect(transaction.sisaSaldoUtang).not.toBeNull();
+          expect(parseFloat(transaction.sisaSaldoUtang ?? '0')).toBeGreaterThan(0);
+        },
+      );
     });
 
     it('should support pagination with page and limit query params', async () => {

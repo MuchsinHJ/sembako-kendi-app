@@ -1,35 +1,17 @@
 /**
  * modules/media/media.routes.ts
  * Routes untuk upload/delete foto produk.
- * Rate limit: 10 uploads per menit per user.
+ * Rate limit: 10 uploads per menit per user (lihat middlewares/rateLimiter.middleware.ts).
  */
 
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
-import { config } from '../../config/env.js';
-import { validate } from '../../middlewares/validate.js';
+import { validate } from '../../middlewares/validate.middleware.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
+import { uploadLimiter } from '../../middlewares/rateLimiter.middleware.js';
 import * as mediaController from './media.controller.js';
 import * as mediaSchema from './media.schema.js';
 
 const router = Router();
-
-// Rate limiter: 10 uploads per menit per user
-const uploadLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 menit
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: () => config.NODE_ENV === 'test',
-  validate: { keyGeneratorIpFallback: false },
-  message: { success: false, error: { code: 'TOO_MANY_REQUESTS', message: 'Terlalu banyak upload. Coba lagi nanti.' } },
-  keyGenerator: (req) => {
-    // Use user ID if authenticated, otherwise use IP with IPv6 normalization
-    if (req.user?.id) return req.user.id;
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    return ip === '::1' ? '127.0.0.1' : ip;
-  },
-});
 
 // Semua route memerlukan autentikasi
 router.use(authenticate);

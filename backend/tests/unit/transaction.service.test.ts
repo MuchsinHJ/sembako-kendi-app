@@ -15,7 +15,7 @@ import {
   NotFoundError,
   ValidationError,
   StockExceededError,
-  VoidWindowExpiredError,
+  MissingDebtorInfoError,
   BusinessRuleError,
 } from '../../src/utils/errors.js';
 
@@ -113,7 +113,7 @@ describe('Transaction Service', () => {
 
       await expect(
         transactionService.createTransaction(input, testUserId),
-      ).rejects.toThrow(ValidationError);
+      ).rejects.toThrow(MissingDebtorInfoError);
     });
 
     it('AC-05: BR-08 - UTANG tanpa nomor HP berhasil (noHpPembeli opsional)', async () => {
@@ -325,21 +325,17 @@ describe('Transaction Service', () => {
   });
 
   describe('listTransactions', () => {
-    let transaction1Id: string;
-    let transaction2Id: string;
-
     beforeAll(async () => {
       // Create test transactions
-      const tx1 = await transactionService.createTransaction(
+      await transactionService.createTransaction(
         {
           uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         },
         testUserId,
       );
-      transaction1Id = tx1.id;
 
-      const tx2 = await transactionService.createTransaction(
+      await transactionService.createTransaction(
         {
           uangDiterima: 0,
           namaPembeli: 'Test Buyer',
@@ -348,7 +344,6 @@ describe('Transaction Service', () => {
         },
         testUserId,
       );
-      transaction2Id = tx2.id;
     });
 
     it('AC-06: List semua transaksi dengan pagination', async () => {

@@ -4,9 +4,9 @@
  * Membuktikan tiap kelas error menghasilkan code + HTTP status yang benar.
  */
 
-import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { jest, describe, test, expect } from '@jest/globals';
 import { createRequest, createResponse } from 'node-mocks-http';
-import { errorHandler } from '../../src/middlewares/errorHandler.js';
+import { errorHandler } from '../../src/middlewares/errorHandler.middleware.js';
 import {
   ValidationError,
   UnauthorizedError,
@@ -99,17 +99,23 @@ describe('errorHandler', () => {
 
   // ─── Business Rule specific (SDD §7.4) ───────────────────────────────────
 
-  describe('Business Rule specific errors → 422 BUSINESS_RULE_VIOLATION', () => {
+  describe('Business Rule specific errors → 422', () => {
     test.each([
       ['StockExceededError',        new StockExceededError()],
       ['MissingDebtorInfoError',    new MissingDebtorInfoError()],
       ['VoidWindowExpiredError',    new VoidWindowExpiredError()],
       ['DebtOverpaymentError',      new DebtOverpaymentError()],
-      ['ProductHasTransactionError',new ProductHasTransactionError()],
-    ])('%s → 422', (_name, err) => {
+    ])('%s → 422 BUSINESS_RULE_VIOLATION', (_name, err) => {
       const { status, body } = callErrorHandler(err);
       expect(status).toBe(422);
       expect(body.error?.code).toBe('BUSINESS_RULE_VIOLATION');
+    });
+
+    // SDD §5.3: delete produk dengan riwayat transaksi memakai code khusus
+    test('ProductHasTransactionError → 422 PRODUCT_HAS_TRANSACTION', () => {
+      const { status, body } = callErrorHandler(new ProductHasTransactionError());
+      expect(status).toBe(422);
+      expect(body.error?.code).toBe('PRODUCT_HAS_TRANSACTION');
     });
   });
 
@@ -156,8 +162,22 @@ describe('errorHandler', () => {
     expect(body.error?.code).toBe('FILE_TOO_LARGE');
   });
 
-  test('MulterError other → 400 VALIDATION_ERROR', () => {
+  test('MulterError LIMIT_UNEXPECTED_FILE → 415 INVALID_FILE_TYPE', () => {
+    const multerErr = new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'file');
+    const { status, body } = callErrorHandler(multerErr);
+    expect(status).toBe(415);
+    expect(body.error?.code).toBe('INVALID_FILE_TYPE');
+  });
+
+  test('MulterError LIMIT_FILE_COUNT → 415 INVALID_FILE_TYPE', () => {
     const multerErr = new multer.MulterError('LIMIT_FILE_COUNT');
+    const { status, body } = callErrorHandler(multerErr);
+    expect(status).toBe(415);
+    expect(body.error?.code).toBe('INVALID_FILE_TYPE');
+  });
+
+  test('MulterError lain (LIMIT_PART_COUNT) → 400 VALIDATION_ERROR', () => {
+    const multerErr = new multer.MulterError('LIMIT_PART_COUNT');
     const { status, body } = callErrorHandler(multerErr);
     expect(status).toBe(400);
     expect(body.error?.code).toBe('VALIDATION_ERROR');

@@ -98,8 +98,10 @@ Backend menggunakan **layered architecture** dengan pemisahan tanggung jawab seb
 | **Validation (Zod schema)** | Memvalidasi bentuk & tipe data request (body/query/params) | `validations/product.schema.ts` |
 | **Service** | Business logic murni (business rules BR-01–BR-16), tidak tahu soal HTTP | `services/product.service.ts` |
 | **Media Service** | Optimasi gambar (Sharp) & komunikasi dengan R2 (S3 client) | `services/media.service.ts` |
-| **Repository (Prisma Client)** | Akses data ke PostgreSQL | `repositories/product.repository.ts` |
+| **Repository (Prisma Client)** | Akses data ke PostgreSQL | `repositories/storage.repository.ts` (khusus object storage) |
 | **Model (Prisma Schema)** | Definisi struktur tabel & relasi | `prisma/schema.prisma` |
+
+**Catatan implementasi (keputusan konservatif):** hanya *object storage* yang dipisahkan ke layer repository (`repositories/storage.repository.ts`, mengimplementasikan `IObjectStorage` — lihat 2.5), karena di situlah pergantian provider paling mungkin terjadi. Untuk modul domain, **Prisma Client dipakai langsung di service layer** tanpa file `*.repository.ts` per modul: query Prisma sudah type-safe dan tipis, sehingga lapisan tambahan hanya menambah boilerplate tanpa manfaat yang jelas pada skala MVP ini (dan berpotensi menyembunyikan `$transaction` interaktif yang wajib dipakai untuk operasi multi-tabel di 4.6). Konsekuensinya, Lampiran A tidak memuat `product.repository.ts`; jika modul tumbuh dan butuh query yang dipakai ulang lintas service, ekstraksi repository dapat dilakukan tanpa mengubah kontrak API.
 
 Alasan pemisahan Service dari Controller: business rule (mis. BR-04 stok tidak boleh negatif, BR-13 aturan void, BR-14 cicilan) harus dapat diuji (unit test) tanpa perlu menjalankan HTTP server. TypeScript memungkinkan setiap DTO (request/response) dan hasil Prisma Client didefinisikan sebagai `interface`/`type` eksplisit, sehingga kesalahan bentuk data antar layer dapat terdeteksi saat *compile time*, melengkapi validasi run-time dari Zod.
 
@@ -147,22 +149,25 @@ Client (multipart/form-data, field "photo")
 ```
 src/
  ├── config/          → koneksi DB, environment (Zod-validated), logger, konfigurasi S3 client (R2)
- ├── middlewares/      → auth, validate, rateLimiter, errorHandler, requestLogger, upload (Multer)
+ ├── middlewares/      → auth, validate, rateLimiter, errorHandler, upload (Multer)
  ├── modules/
  │    ├── auth/
- │    ├── user/
- │    ├── product/
- │    ├── stock/
+ │    ├── product/       → termasuk concern Product & Stock (3.4, 3.5)
  │    ├── media/        → image processing & R2 client wrapper
  │    ├── transaction/
  │    ├── debt/
  │    ├── dashboard/
  │    └── report/
+ ├── repositories/     → hanya wrapper object storage (storage.repository.ts)
  ├── types/            → shared TypeScript types/interfaces (DTO, Express Request augmentation)
  ├── utils/            → response helper, money formatter, date helper
  └── app.ts / server.ts
 ```
-Setiap module (mis. `product/`) berisi: `*.routes.ts`, `*.controller.ts`, `*.service.ts`, `*.repository.ts`, `*.schema.ts` — memudahkan navigasi dan pengujian per-modul.
+Setiap module (mis. `product/`) berisi: `*.routes.ts`, `*.controller.ts`, `*.service.ts`, `*.schema.ts`.
+
+**Catatan modul `user/` dan `stock/`:** keduanya tidak dibuat sebagai direktori terpisah.
+- `stock/` — sesuai 3.5, stok bukan modul routing; seluruh endpoint stok (`/products/low-stock`, `/products/:id/stock-threshold`, `/products/:id/stock-adjustment`) berada di modul `product/`, dan perubahan stok sebagai efek samping transaksi berada di `transaction.service.ts`.
+- `user/` — MVP hanya punya satu akun yang dibuat lewat seed/admin, dan tidak ada endpoint profile atau ganti password di kontrak API (Bagian 5). Membuat modul kosong hanya menambah permukaan kode tanpa fitur; kebutuhan FR-05 akan ditambahkan bersama endpoint-nya pada fase berikutnya.
 
 ### 2.5 Prinsip Desain
 - **Separation of Concerns** — HTTP, validasi, business logic, dan akses data dipisah per layer (2.2).
@@ -221,7 +226,7 @@ Modul yang menangani seluruh siklus upload dan optimasi foto produk.
 5. Menghapus object lama di R2 saat foto produk diganti atau produk dihapus permanen (`DeleteObjectCommand`), mencegah *orphan file*.
 6. Mengembalikan `fotoKey` dan `fotoUrl` publik ke `product.service` untuk disimpan di database.
 
-**Struktur:** `media.routes.ts` (di-mount di bawah `/products/:id/photo`), `media.controller.ts`, `media.service.ts` (business logic optimasi + storage), `storage.repository.ts` (wrapper tipis di atas `S3Client`, mengimplementasikan interface `IObjectStorage` — lihat 2.5), `media.schema.ts` (validasi tambahan di luar yang sudah ditangani Multer).
+**Struktur:** `media.routes.ts` (di-mount di bawah `/products/:id/photo`), `media.controller.ts`, `media.service.ts` (business logic optimasi + storage), `repositories/storage.repository.ts` (wrapper tipis di atas `S3Client`, mengimplementasikan interface `IObjectStorage` — lihat 2.5), `media.schema.ts` (validasi tambahan di luar yang sudah ditangani Multer). Konfigurasi Multer (memory storage, `fileFilter` MIME, `limits.fileSize`/`files`) berada di `middlewares/upload.middleware.ts` dan dipakai ulang oleh route media, sehingga aturan ukuran/tipe file hanya didefinisikan di satu tempat.
 
 Referensi: memperluas FR-07 (tambah produk) dan FR-09 (ubah produk) pada SRS, khususnya field `foto_url` pada entity Produk (SRS 7.2).
 
@@ -264,9 +269,9 @@ Lihat Bagian 7 secara detail. Prinsip umum: setiap error (validasi, business rul
 ### 3.13 Utilities
 - `utils/response.ts` — helper untuk membentuk response sukses/gagal yang konsisten (Bagian 5.1).
 - `utils/money.ts` — format Rupiah untuk kebutuhan ekspor/label (BR-16).
-- `utils/date.ts` — perhitungan rentang waktu (mis. cutoff void BR-13) menggunakan **date-fns** agar konsisten timezone (Asia/Jakarta).
+- `utils/date.ts` — perhitungan rentang waktu dan hari kalender (mis. cutoff void BR-13, batas "hari ini"/"bulan berjalan" dashboard) menggunakan **date-fns** + **date-fns-tz** agar konsisten dengan timezone `Asia/Jakarta`. Fungsi `isSameCalendarDay` dipakai bersama oleh `transaction.service` (void) dan pengujian.
 - `utils/asyncHandler.ts` — wrapper agar error di fungsi `async` controller otomatis diteruskan ke `errorHandler` tanpa perlu `try/catch` berulang.
-- `utils/objectKey.ts` — helper pembuatan object key R2 yang konsisten dan aman (sanitasi nama file, penambahan UUID agar tidak collision).
+- `utils/objectKey.ts` — helper pembuatan object key R2 yang konsisten dan aman (`makeProductPhotoKey`), menambahkan UUID agar tidak collision.
 
 ---
 
@@ -291,6 +296,7 @@ model User {
   payments      PaymentHistory[]
   refreshTokens RefreshToken[]
   sessions      Session[] // dipakai jika AUTH_STRATEGY=session
+  stockAdjustments StockAdjustment[]
 }
 
 model RefreshToken {
@@ -327,6 +333,7 @@ model Product {
   updatedAt     DateTime @updatedAt
 
   detailTransaksi DetailTransaction[]
+  stockAdjustments StockAdjustment[]
 
   @@index([status])
   @@index([kategori])
@@ -405,6 +412,24 @@ model PaymentHistory {
 
   @@index([transactionId])
 }
+
+// Audit trail penyesuaian stok manual (PATCH /products/:id/stock-adjustment, 5.4).
+// Append-only: setiap penyesuaian mencatat delta, alasan, dan stok sebelum/sesudah
+// sehingga perubahan stok di luar transaksi tetap dapat ditelusuri (BR-04, FR-15).
+model StockAdjustment {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  delta         Int      // positif = tambah, negatif = kurangi (tidak boleh 0)
+  alasan        String   // wajib diisi untuk audit
+  stokSebelum   Int
+  stokSesudah   Int
+  dicatatOlehId String
+  dicatatOleh   User     @relation(fields: [dicatatOlehId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([productId])
+}
 ```
 
 ### 4.3 Relasi
@@ -414,6 +439,8 @@ model PaymentHistory {
 - `Transaction (1) — (N) PaymentHistory` — khusus transaksi berstatus Utang; riwayat cicilan (BR-14).
 - `User (1) — (N) RefreshToken` — mendukung multi-sesi & revocation saat logout.
 - `User (1) — (N) Session` — relevan hanya jika strategi auth = session.
+- `Product (1) — (N) StockAdjustment` — riwayat penyesuaian stok manual untuk audit (BR-04, FR-15).
+- `User (1) — (N) StockAdjustment` — mencatat siapa yang melakukan penyesuaian.
 
 ### 4.4 Constraint
 | Constraint | Diterapkan di | Referensi |
@@ -438,6 +465,7 @@ Prisma migration menyertakan `CHECK` constraint tambahan via raw SQL (`ALTER TAB
 - `Transaction(statusTransaksi)`, `Transaction(statusPembayaran)`, `Transaction(tanggal)` — mempercepat query laporan per periode & status (FR-35, FR-37, NFR-01).
 - `DetailTransaction(transactionId)`, `DetailTransaction(productId)` — mempercepat join saat menampilkan detail transaksi dan tren produk (FR-38).
 - `PaymentHistory(transactionId)` — mempercepat query riwayat cicilan per transaksi (FR-37).
+- `StockAdjustment(productId)` — mempercepat query riwayat penyesuaian stok per produk (FR-15).
 
 ### 4.6 Transaction / Atomicity
 Operasi berikut **wajib** dibungkus `prisma.$transaction([...])` atau interactive transaction (`prisma.$transaction(async (tx) => {...})`):
@@ -488,15 +516,16 @@ Untuk modul Media, karena operasi melibatkan **dua sistem berbeda** (PostgreSQL 
   }
 }
 ```
-- Nilai uang dikirim sebagai string/number desimal (bukan float JS murni) untuk menghindari isu presisi; format tampilan Rupiah (BR-16) menjadi tanggung jawab frontend, backend mengirim nilai numerik mentah.
-- Pagination: `?page=&limit=` untuk endpoint list (`GET /products`, `GET /transactions`), default `limit=20`.
+- Nilai uang (harga, total, kembalian, sisa saldo, omzet, profit) dikirim sebagai **string desimal** dengan 2 angka desimal, mis. `"75000.00"` — bukan `number`/float JS — untuk menghindari isu presisi pembulatan di sisi client. Konversi dilakukan terpusat lewat `utils/money.ts#decimalToString` dari `Prisma.Decimal`. Format tampilan Rupiah (BR-16) menjadi tanggung jawab frontend; backend mengirim nilai desimal mentah. Field uang yang memang nullable (`uangDiterima`, `kembalian`, `sisaSaldoUtang` pada transaksi LUNAS) dikirim sebagai `null`.
+- Pagination: `?page=&limit=` untuk endpoint list (`GET /products`, `GET /transactions`, `GET /debts`), default `limit=20`.
+- Health check: `GET /health` (di bawah base path, sehingga lengkapnya `/api/v1/health`) bersifat **publik** (tanpa autentikasi) dan dipakai load balancer/uptime monitor. Response: `{ success: true, data: { status: "ok", environment, timestamp }, message }`. Endpoint ini tidak memeriksa koneksi database secara aktif agar tidak menambah beban; kegagalan DB akan terlihat dari endpoint lain dan dari metrik log.
 
 ### 5.2 Authentication API
 | Method | Endpoint | Deskripsi | Referensi |
 |---|---|---|---|
 | POST | `/auth/login` | Login dengan email & password, mengembalikan access token + set refresh token cookie | FR-01, FR-02 |
 | POST | `/auth/refresh-token` | Menghasilkan access token baru dari refresh token cookie | FR-01 |
-| POST | `/auth/logout` | Meng-invalidasi refresh token/session (revoke) | FR-04 |
+| POST | `/auth/logout` | Meng-invalidasi refresh token/session (revoke). **Wajib access token** yang valid, sebagaimana endpoint lain di luar login & refresh-token (5.1) | FR-04 |
 
 ### 5.3 Product API
 | Method | Endpoint | Deskripsi | Referensi |
@@ -558,14 +587,18 @@ Aturan penurunan status pembayaran (diterapkan di `transaction.service.createTra
 |---|---|---|---|
 | GET | `/dashboard/summary` | Omzet & profit periode berjalan, produk low-stock, total saldo utang | FR-43–FR-45 |
 
+Endpoint ini **tidak menerima query parameter**: "periode berjalan" didefinisikan tetap sebagai *hari ini* dan *bulan berjalan* menurut timezone `Asia/Jakarta`. Kebutuhan analisis rentang tanggal bebas dilayani oleh Report API (5.8).
+
 ### 5.8 Report API
 | Method | Endpoint | Deskripsi | Referensi |
 |---|---|---|---|
-| GET | `/reports/sales?start=&end=` | Laporan omzet & profit per periode | FR-35, FR-36, FR-39 |
-| GET | `/reports/debts?start=&end=` | Laporan utang per periode | FR-37 |
-| GET | `/reports/product-trend?start=&end=` | Tren produk terlaris | FR-38 |
-| GET | `/reports/sales/export?format=xlsx\|pdf` | Ekspor laporan penjualan | FR-40, FR-42 |
-| GET | `/reports/debts/export?format=xlsx\|pdf` | Ekspor laporan utang | FR-41, FR-42 |
+| GET | `/reports/sales?startDate=&endDate=` | Laporan omzet & profit per periode | FR-35, FR-36, FR-39 |
+| GET | `/reports/debts?startDate=&endDate=` | Laporan utang per periode | FR-37 |
+| GET | `/reports/product-trend?startDate=&endDate=` | Tren produk terlaris | FR-38 |
+| GET | `/reports/sales/export?format=xlsx\|pdf&startDate=&endDate=` | Ekspor laporan penjualan | FR-40, FR-42 |
+| GET | `/reports/debts/export?format=xlsx\|pdf&startDate=&endDate=` | Ekspor laporan utang | FR-41, FR-42 |
+
+Nama parameter periode pada implementasi adalah **`startDate`/`endDate`** (format `YYYY-MM-DD`), bukan `start`/`end`. Ini mengikuti konvensi yang seragam dengan `GET /transactions` sehingga frontend memakai satu pola penamaan yang sama di semua endpoint berperiode.
 
 ### 5.9 Error Response
 Lihat format umum pada 5.1. Daftar `code` standar dijabarkan pada Bagian 7.1.
@@ -621,6 +654,7 @@ Lihat format umum pada 5.1. Daftar `code` standar dijabarkan pada Bagian 7.1.
 | Token/session valid tapi tidak berhak (reserved utk fase role berikutnya) | `FORBIDDEN` | 403 |
 | Resource tidak ditemukan | `NOT_FOUND` | 404 |
 | Pelanggaran business rule | `BUSINESS_RULE_VIOLATION` | 422 |
+| Produk yang sudah punya riwayat transaksi tidak dapat dihapus (khusus `DELETE /products/:id`) | `PRODUCT_HAS_TRANSACTION` | 422 |
 | Tipe file tidak didukung | `INVALID_FILE_TYPE` | 415 |
 | Ukuran file melebihi batas | `FILE_TOO_LARGE` | 413 |
 | Gagal mengunggah/menghapus file di object storage | `STORAGE_ERROR` | 502 |
@@ -632,19 +666,27 @@ Seluruh controller **tidak boleh** melempar HTTP status langsung — status dite
 
 ### 7.3 Validation Error
 - Dihasilkan otomatis oleh middleware `validate(schema)` saat parsing Zod gagal; response memuat `details` berisi daftar field & pesan spesifik (format 5.1), agar frontend dapat menyorot field yang salah.
-- Error dari Multer (mis. `MulterError` dengan `code: 'LIMIT_FILE_SIZE'`) ditangkap secara eksplisit di `errorHandler` dan dipetakan ke `FILE_TOO_LARGE`/`INVALID_FILE_TYPE` agar format response tetap konsisten dengan error lainnya.
+- Error dari Multer (mis. `MulterError` dengan `code: 'LIMIT_FILE_SIZE'`) ditangkap secara eksplisit di `errorHandler` dan dipetakan ke `FILE_TOO_LARGE`/`INVALID_FILE_TYPE` agar format response tetap konsisten dengan error lainnya. Pemetaan lengkapnya:
+
+| Kondisi | `code` | HTTP Status |
+|---|---|---|
+| `fileFilter` menolak MIME (bukan `image/jpeg`/`png`/`webp`) → `InvalidFileTypeError` dari `upload.middleware` | `INVALID_FILE_TYPE` | 415 |
+| `MulterError: LIMIT_FILE_SIZE` (melebihi `MAX_UPLOAD_SIZE_MB`) | `FILE_TOO_LARGE` | 413 |
+| `MulterError: LIMIT_UNEXPECTED_FILE` / `LIMIT_FILE_COUNT` (field/jumlah file tidak sesuai) | `INVALID_FILE_TYPE` | 415 |
+| `MulterError` lainnya (mis. `LIMIT_PART_COUNT`) | `VALIDATION_ERROR` | 400 |
 - Referensi contoh: AC-01 (harga jual ≤ 0), AC-05 (nama/no HP kosong saat Utang).
 
 ### 7.4 Business Rule Error
 - Dilempar dari **Service layer** (bukan Controller) sebagai instance khusus, mis. `StockExceededError`, `DebtOverpaymentError`, `VoidWindowExpiredError`, `ProductHasTransactionError`.
+- Semua turunan `BusinessRuleError` memakai HTTP status `422`. Secara default `code`-nya `BUSINESS_RULE_VIOLATION`; `ProductHasTransactionError` mempersempit `code` menjadi `PRODUCT_HAS_TRANSACTION` (lihat 5.3 & 7.1) agar frontend dapat menampilkan pesan khusus untuk kasus hapus produk.
 
-| Error | BR/FR terkait | AC terkait |
-|---|---|---|
-| `StockExceededError` | BR-05 | AC-04 |
-| `MissingDebtorInfoError` | BR-08 | AC-05 |
-| `VoidWindowExpiredError` | BR-13 | AC-08 |
-| `DebtOverpaymentError` | BR-14 | AC-12 |
-| `ProductHasTransactionError` | BR-12 | AC-02 |
+| Error | `code` | BR/FR terkait | AC terkait |
+|---|---|---|---|
+| `StockExceededError` | `BUSINESS_RULE_VIOLATION` | BR-05 | AC-04 |
+| `MissingDebtorInfoError` | `BUSINESS_RULE_VIOLATION` | BR-08 | AC-05 |
+| `VoidWindowExpiredError` | `BUSINESS_RULE_VIOLATION` | BR-13 | AC-08 |
+| `DebtOverpaymentError` | `BUSINESS_RULE_VIOLATION` | BR-14 | AC-12 |
+| `ProductHasTransactionError` | `PRODUCT_HAS_TRANSACTION` | BR-12 | AC-02 |
 
 ### 7.5 Database Error
 - Error dari Prisma (mis. `PrismaClientKnownRequestError` untuk unique constraint violation) ditangkap di `errorHandler`, dipetakan ke pesan yang aman ditampilkan ke user (tidak membocorkan detail query/skema), dan tetap dicatat lengkap di log Pino (level `error`) untuk keperluan debugging.
@@ -666,6 +708,8 @@ Pendekatan **testing pyramid**: unit test (porsi terbesar) → integration test 
 - Contoh cakupan: perhitungan total transaksi (BR-07), validasi stok cukup (BR-05), perhitungan saldo setelah cicilan (BR-14), penentuan status soft/hard delete produk (BR-12).
 - Dependency (Prisma) di-mock agar unit test tidak menyentuh database sungguhan.
 - `media.service` diuji dengan **mock `S3Client`** (mis. `aws-sdk-client-mock`) agar unit test tidak benar-benar mengunggah file ke R2; fokus pengujian: Sharp dipanggil dengan parameter resize/kompresi yang benar, object key dibentuk sesuai pola yang ditentukan, dan urutan operasi pada 4.6/7.6 diikuti dengan benar termasuk pada skenario gagal di tengah proses.
+
+> **Catatan implementasi (keputusan konservatif).** Pada repo saat ini unit test service (`transaction.service.test.ts`, `debt.service.test.ts`, `product.service.test.ts`) berjalan terhadap **database test sungguhan**, bukan Prisma yang di-mock. Alasannya: seluruh BR melibatkan `prisma.$transaction`, row lock, dan constraint DB — mem-mock Prisma justru menghapus bagian yang paling berisiko, dan test menjadi tidak membuktikan atomicity. Biaya yang diterima: unit test membutuhkan PostgreSQL aktif (lihat `tests/helpers/testUser.ts` + `jest.config.ts` `maxWorkers: 1`). Untuk `media.service`, `aws-sdk-client-mock` **belum terpasang** sehingga unit test dengan mock `S3Client` belum ada; `media.test.ts` saat ini menguji seluruh jalur validasi yang berhenti sebelum menyentuh R2 plus otorisasi. Menambahkan mock S3 tetap direkomendasikan (tercatat sebagai Open Question di `backend/docs/AUDIT.md` §9).
 
 ### 8.3 Integration Test
 - Target: Service + Repository + database, menggunakan database PostgreSQL **test** terpisah (di-reset setiap run, mis. via `prisma migrate reset` pada environment `test`).
@@ -701,11 +745,10 @@ Tiga environment: `development`, `test`, `production`, dibedakan lewat `NODE_ENV
 | `AUTH_STRATEGY` | `jwt` (default) atau `session` |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Secret signing token (jika `AUTH_STRATEGY=jwt`) |
 | `JWT_ACCESS_EXPIRES_IN` / `JWT_REFRESH_EXPIRES_IN` | Mis. `15m` / `7d` |
-| `SESSION_SECRET` | Secret cookie session (jika `AUTH_STRATEGY=session`) |
 | `ALLOWED_ORIGINS` | Daftar origin frontend yang diizinkan CORS (comma-separated) |
-| `BCRYPT_SALT_ROUNDS` | Mis. `10` |
-| `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | Konfigurasi express-rate-limit |
-| `LOG_LEVEL` | Level Pino: `debug` (dev) / `info` (prod) |
+| `BCRYPT_SALT_ROUNDS` | Mis. `10` (dipakai bersama oleh `auth.service`, `prisma/seed.ts`, dan `scripts/reset-password.ts`) |
+| `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | Konfigurasi express-rate-limit global (default `60000` / `100`) |
+| `LOG_LEVEL` | Level Pino: `fatal`\|`error`\|`warn`\|`info`\|`debug`\|`trace`\|`silent`; default `debug` di development dan `info` di production |
 | `R2_ACCOUNT_ID` | Account ID Cloudflare untuk endpoint R2 |
 | `R2_ACCESS_KEY_ID` | Access key R2 (API token S3-compatible) |
 | `R2_SECRET_ACCESS_KEY` | Secret key R2 |
@@ -714,6 +757,10 @@ Tiga environment: `development`, `test`, `production`, dibedakan lewat `NODE_ENV
 | `MAX_UPLOAD_SIZE_MB` | Batas ukuran file upload (default `5`) |
 
 Seluruh variabel di atas divalidasi dengan Zod saat startup (3.1) — aplikasi tidak akan berjalan jika ada yang hilang/tidak valid, untuk mencegah kesalahan konfigurasi lolos ke production secara diam-diam.
+
+**Catatan `AUTH_STRATEGY=session`:** strategi session **tidak** memakai `express-session` maupun cookie bertanda tangan, sehingga tidak memerlukan `SESSION_SECRET`. Backend membuat ID sesi acak opaque, menyimpannya di tabel `Session`, dan mengirimkannya lewat cookie httpOnly `sid`; verifikasi dilakukan dengan lookup ke tabel tersebut (lihat 3.2). Contoh lengkap seluruh variabel tersedia pada `backend/.env.example`.
+
+Versi Node.js dikunci pada `backend/.nvmrc` (Node 22) dan `engines` di `package.json` (`>=20.0.0`).
 
 ### 9.3 Database Deployment
 - PostgreSQL dijalankan sebagai managed service (mis. Supabase/Neon/RDS) atau instance terpisah dari backend, agar data persisten dan dapat di-backup independen (NFR-07).
@@ -744,17 +791,19 @@ Karena tidak menggunakan container, environment server (versi Node, versi OS, li
 
 | SRS FR/BR/AC | Modul Backend | Endpoint | Test Terkait |
 |---|---|---|---|
-| FR-01–FR-05, NFR-05, NFR-06 | Authentication (3.2) | `/auth/*` (5.2) | Unit: auth.service; API: login flow |
-| FR-06–FR-15, BR-03, BR-04, BR-12, BR-15 | Product & Stock (3.4, 3.5) | `/products/*` (5.3, 5.4) | Unit: product.service; API: AC-01, AC-02, AC-03 |
-| Perluasan FR-07/FR-09 (field `foto_url`, SRS 7.2) | Media & Image Upload (3.6) | `POST/DELETE /products/:id/photo` (5.3) | Unit: media.service (mock S3); API: upload valid/invalid file — direkomendasikan ditambahkan sebagai AC-18 pada revisi SRS berikutnya |
-| FR-16–FR-24, BR-05–BR-10 | Transaction (3.7) | `POST /transactions` (5.5) | Unit: `transaction.service.test.ts`; API: AC-04, AC-05, AC-06, FR-20 (turunan status dari `uangDiterima`) |
-| FR-25–FR-29, BR-13 | Transaction — Void (3.7) | `POST /transactions/:id/void` (5.5) | Integration: AC-07, AC-08, AC-09 |
-| FR-30–FR-34, BR-14 | Debt/Installment (3.8) | `/debts/*` (5.6) | Integration: AC-10, AC-11, AC-12 |
-| FR-43–FR-45 | Dashboard (3.9) | `/dashboard/summary` (5.7) | API: AC-17 |
-| FR-35–FR-42, BR-11, BR-16 | Report & Trend (3.10) | `/reports/*` (5.8) | API: AC-13–AC-16 |
+| FR-01–FR-05, NFR-05, NFR-06 | Authentication (3.2) | `/auth/*` (5.2) | API: `auth.test.ts` (login, refresh, logout wajib token, brute-force 429, health publik); env: `env.test.ts` |
+| FR-06–FR-15, BR-03, BR-04, BR-12, BR-15 | Product & Stock (3.4, 3.5) | `/products/*` (5.3, 5.4) | Unit: `product.service.test.ts`; API: `product.test.ts` (AC-01, AC-02, AC-03, BR-04, BR-12) |
+| Perluasan FR-07/FR-09 (field `foto_url`, SRS 7.2) | Media & Image Upload (3.6) | `POST/DELETE /products/:id/photo` (5.3) | API: `media.test.ts` (401/400/404/415); unit test dengan mock S3 belum ada — direkomendasikan ditambahkan sebagai AC-18 pada revisi SRS berikutnya |
+| FR-16–FR-24, BR-05–BR-10 | Transaction (3.7) | `POST /transactions` (5.5) | Unit: `transaction.service.test.ts`; API: `transaction.test.ts` (AC-04, AC-05, AC-05a, AC-05b, AC-06, FR-20) |
+| FR-25–FR-29, BR-13 | Transaction — Void (3.7) | `POST /transactions/:id/void` (5.5) | Unit: `transaction.service.test.ts` (AC-07, AC-08); API: AC-09 lewat `report.test.ts` |
+| FR-30–FR-34, BR-14 | Debt/Installment (3.8) | `/debts/*` (5.6) | Unit: `debt.service.test.ts`; API: `debt.test.ts` (AC-10, AC-11, AC-12) |
+| FR-43–FR-45 | Dashboard (3.9) | `/dashboard/summary` (5.7) | API: `dashboard.test.ts` (AC-17, uang string, low-stock, total utang) |
+| FR-35–FR-42, BR-11, BR-16 | Report & Trend (3.10) | `/reports/*` (5.8) | API: `report.test.ts` (AC-13–AC-16, ekspor xlsx/pdf) |
 | NFR-01, NFR-02 | Semua modul, termasuk optimasi gambar (3.6) yang menekan waktu muat katalog | — | Performance test |
 | NFR-03, NFR-04 | Arsitektur (2.1) | — | — |
 | NFR-08, NFR-09 | Frontend concern | — | — |
+
+> Pemetaan lengkap per-FR/BR/AC ke file test dikelola di `backend/docs/TRACEABILITY.md`; ringkasan hasil ada di `backend/docs/AUDIT.md`.
 
 ---
 
@@ -850,17 +899,18 @@ kendis-market-backend/
 │   │   │   ├── product.routes.ts
 │   │   │   ├── product.controller.ts
 │   │   │   ├── product.service.ts
-│   │   │   ├── product.repository.ts
 │   │   │   └── product.schema.ts
 │   │   ├── media/
+│   │   │   ├── media.routes.ts
 │   │   │   ├── media.controller.ts
 │   │   │   ├── media.service.ts
-│   │   │   ├── storage.repository.ts
 │   │   │   └── media.schema.ts
 │   │   ├── transaction/
 │   │   ├── debt/
 │   │   ├── dashboard/
 │   │   └── report/
+│   ├── repositories/
+│   │   └── storage.repository.ts   → wrapper S3Client (IObjectStorage)
 │   ├── types/
 │   │   ├── express.d.ts          (augmentasi Request: req.user)
 │   │   └── dto.ts
@@ -894,32 +944,35 @@ kendis-market-backend/
 | `zod` | Validasi schema (request & environment variable) |
 | `@prisma/client`, `prisma` | ORM & migration untuk PostgreSQL |
 | `jsonwebtoken` | JWT (strategi auth default) |
-| `express-session` (+ store Prisma/PostgreSQL) | Strategi auth alternatif "session" |
 | `bcrypt` | Hashing password |
 | `multer` | Menerima file upload (`multipart/form-data`) |
 | `sharp` | Resize, kompresi, konversi format gambar |
 | `@aws-sdk/client-s3` | Klien S3-compatible untuk komunikasi dengan Cloudflare R2 |
 | `pino`, `pino-http` | Logging terstruktur |
 | `cors` | Kontrol akses lintas origin |
+| `helmet` | HTTP security header |
 | `express-rate-limit` | Rate limiting |
 | `dotenv` | Memuat environment variable dari file `.env` |
 
 **Dependency pendukung:**
 | Package | Fungsi |
 |---|---|
-| `@types/express`, `@types/multer`, `@types/bcrypt`, `@types/jsonwebtoken`, `@types/cors`, `@types/express-session` | Definisi tipe TypeScript untuk masing-masing library |
+| `@types/express`, `@types/multer`, `@types/bcrypt`, `@types/jsonwebtoken`, `@types/cors` | Definisi tipe TypeScript untuk masing-masing library |
 | `ts-node-dev` | Live-reload saat development tanpa build manual berulang |
 | `exceljs` | Ekspor laporan ke Excel |
 | `pdfkit` | Ekspor laporan ke PDF |
 | `date-fns` | Manipulasi tanggal (rentang laporan, cutoff void) |
 | `uuid` (+ `@types/uuid`) | Generate UUID untuk primary key & object key R2 |
 | `compression` | Kompresi response HTTP (gzip) |
-| `aws-sdk-client-mock` (dev) | Mock `S3Client` pada unit test |
+| `aws-sdk-client-mock` (dev, **belum terpasang**) | Mock `S3Client` pada unit test — direkomendasikan ditambahkan agar `media.service` dapat diuji tanpa jaringan (lihat catatan §8.2) |
 | `pm2` | Process manager di server production: auto-restart, log management, reload tanpa downtime |
 | `jest`, `ts-jest`, `supertest`, `eslint`, `prettier` (dev) | Testing & konsistensi gaya kode |
 
 ### C. Ringkasan Endpoint
 ```
+Health
+  GET    /api/v1/health
+
 Auth
   POST   /api/v1/auth/login
   POST   /api/v1/auth/refresh-token

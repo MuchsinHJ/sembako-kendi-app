@@ -1,5 +1,5 @@
 /**
- * middlewares/errorHandler.ts
+ * middlewares/errorHandler.middleware.ts
  * Middleware error terpusat (SDD §3.12, §7).
  *
  * Menangani:
@@ -17,7 +17,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import multer from 'multer';
-import { AppError, ValidationError } from '../utils/errors.js';
+import { AppError } from '../utils/errors.js';
 import { sendError } from '../utils/response.js';
 import { logger } from '../config/logger.js';
 
@@ -55,7 +55,6 @@ const handlePrismaError = (
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler = (
   err: unknown,
   req: Request,
@@ -103,13 +102,29 @@ export const errorHandler = (
     return;
   }
 
-  // 5. MulterError
+  // 5. MulterError — dipetakan eksplisit agar konsisten dengan SDD §7.1/§7.3.
+  //    Catatan: penolakan MIME dari fileFilter sudah menjadi `InvalidFileTypeError`
+  //    (AppError) sehingga tertangani di langkah 1 sebagai 415 INVALID_FILE_TYPE.
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
+      logger.warn({ multerCode: err.code, field: err.field }, 'Upload ditolak: file terlalu besar');
       sendError(res, 413, 'FILE_TOO_LARGE', 'Ukuran file melebihi batas yang diizinkan.');
       return;
     }
-    // Field / file count exceeded dll
+
+    if (err.code === 'LIMIT_UNEXPECTED_FILE' || err.code === 'LIMIT_FILE_COUNT') {
+      logger.warn({ multerCode: err.code, field: err.field }, 'Upload ditolak: jumlah/field file tidak sesuai');
+      sendError(
+        res,
+        415,
+        'INVALID_FILE_TYPE',
+        'Jumlah atau nama field file tidak sesuai. Kirim tepat satu file pada field "photo".',
+      );
+      return;
+    }
+
+    // Field lain (mis. LIMIT_PART_COUNT, LIMIT_FIELD_KEY) tetap error validasi
+    logger.warn({ multerCode: err.code, field: err.field }, 'Upload error lainnya');
     sendError(res, 400, 'VALIDATION_ERROR', `Upload error: ${err.message}`);
     return;
   }

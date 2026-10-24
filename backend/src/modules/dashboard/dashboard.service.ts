@@ -3,18 +3,24 @@
  * Business logic untuk dashboard ringkasan (Fase 9).
  *
  * Referensi: SDD §3.9; SRS FR-43–FR-45, BR-11, BR-16, AC-17
+ *
+ * Catatan konvensi: nilai uang dikirim sebagai STRING desimal (utils/money.ts).
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/db.js";
-import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import {
+  getStartOfDayJakarta,
+  getEndOfDayJakarta,
+  getStartOfMonthJakarta,
+  getEndOfMonthJakarta,
+} from "../../utils/date.js";
+import { decimalToString } from "../../utils/money.js";
 import type { DashboardSummaryQuery } from "./dashboard.schema.js";
 
-const TIMEZONE = "Asia/Jakarta";
-
 interface PeriodSummary {
-  omzet: number;
-  profit: number;
+  omzet: string;
+  profit: string;
   transactionCount: number;
 }
 
@@ -30,7 +36,7 @@ interface DashboardSummaryData {
   hariIni: PeriodSummary;
   bulanBerjalan: PeriodSummary;
   produkLowStock: LowStockProduct[];
-  totalSaldoUtang: number;
+  totalSaldoUtang: string;
 }
 
 /**
@@ -41,23 +47,19 @@ interface DashboardSummaryData {
  * Referensi: FR-43, FR-44, FR-45, AC-17.
  */
 export async function getDashboardSummary(
-  query: DashboardSummaryQuery,
+  _query: DashboardSummaryQuery = {},
 ): Promise<DashboardSummaryData> {
-  const now = toZonedTime(new Date(), TIMEZONE);
+  // Rentang waktu hari ini & bulan berjalan (Asia/Jakarta → UTC)
+  const todayStart = getStartOfDayJakarta();
+  const todayEnd = getEndOfDayJakarta();
+  const monthStart = getStartOfMonthJakarta();
+  const monthEnd = getEndOfMonthJakarta();
 
-  // Rentang waktu hari ini (Asia/Jakarta)
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
-
-  // Rentang waktu bulan berjalan (Asia/Jakarta)
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-
-  // ─── 1. Omzet & Profit Hari Ini ──────────────────────────────────────────────
-  const hariIni = await calculatePeriodSummary(todayStart, todayEnd);
-
-  // ─── 2. Omzet & Profit Bulan Berjalan ────────────────────────────────────────
-  const bulanBerjalan = await calculatePeriodSummary(monthStart, monthEnd);
+  // ─── 1 & 2. Omzet & Profit hari ini dan bulan berjalan ──────────────────────
+  const [hariIni, bulanBerjalan] = await Promise.all([
+    calculatePeriodSummary(todayStart, todayEnd),
+    calculatePeriodSummary(monthStart, monthEnd),
+  ]);
 
   // ─── 3. Produk Low-Stock (stok <= stokMinimum) ────────────────────────────────
   // Referensi: FR-14, BR-15
@@ -97,13 +99,11 @@ export async function getDashboardSummary(
     },
   });
 
-  const totalSaldoUtang = Number(utangAggregate._sum.sisaSaldoUtang ?? 0);
-
   return {
     hariIni,
     bulanBerjalan,
     produkLowStock,
-    totalSaldoUtang,
+    totalSaldoUtang: decimalToString(utangAggregate._sum.sisaSaldoUtang) ?? "0.00",
   };
 }
 
@@ -118,65 +118,51 @@ async function calculatePeriodSummary(
   start: Date,
   end: Date,
 ): Promise<PeriodSummary> {
-  // Aggregate dari DetailTransaction untuk perhitungan profit
-  // Karena snapshot harga ada di DetailTransaction, bukan Transaction
-  const result = await prisma.detailTransaction.aggregate({
-    where: {
-      transaction: {
-        statusTransaksi: "AKTIF", // KECUALIKAN yang dibatalkan (FR-39, BR-13)
-        tanggal: {
-          gte: start,
-          lte: end,
-        },
+  const where: Prisma.DetailTransactionWhereInput = {
+    transaction: {
+      statusTransaksi: "AKTIF", // KECUALIKAN yang dibatalkan (FR-39, BR-13)
+      tanggal: {
+        gte: start,
+        lte: end,
       },
     },
-    _sum: {
-      subtotal: true, // omzet = SUM(subtotal)
-    },
-  });
+  };
 
-  const omzet = Number(result._sum.subtotal ?? 0);
-
-  // Hitung profit: SUM((hargaJualSnapshot - hargaModalSnapshot) × jumlah)
-  // Tidak bisa dilakukan langsung dengan aggregate, perlu raw query atau fetch detail
-  const details = await prisma.detailTransaction.findMany({
-    where: {
-      transaction: {
+  const [omzetAggregate, details, transactionCount] = await Promise.all([
+    // omzet = SUM(subtotal); dihitung di DB dengan Decimal
+    prisma.detailTransaction.aggregate({
+      where,
+      _sum: { subtotal: true },
+    }),
+    // profit butuh snapshot harga per baris, bukan sekadar SUM kolom
+    prisma.detailTransaction.findMany({
+      where,
+      select: {
+        hargaJualSnapshot: true,
+        hargaModalSnapshot: true,
+        jumlah: true,
+      },
+    }),
+    prisma.transaction.count({
+      where: {
         statusTransaksi: "AKTIF",
         tanggal: {
           gte: start,
           lte: end,
         },
       },
-    },
-    select: {
-      hargaJualSnapshot: true,
-      hargaModalSnapshot: true,
-      jumlah: true,
-    },
-  });
+    }),
+  ]);
 
-  const profit = details.reduce((sum, item) => {
-    const itemProfit =
-      (Number(item.hargaJualSnapshot) - Number(item.hargaModalSnapshot)) *
-      item.jumlah;
-    return sum + itemProfit;
-  }, 0);
-
-  // Hitung jumlah transaksi
-  const transactionCount = await prisma.transaction.count({
-    where: {
-      statusTransaksi: "AKTIF",
-      tanggal: {
-        gte: start,
-        lte: end,
-      },
-    },
-  });
+  const profitDecimal = details.reduce((sum, item) => {
+    return sum.add(
+      item.hargaJualSnapshot.sub(item.hargaModalSnapshot).mul(item.jumlah),
+    );
+  }, new Prisma.Decimal(0));
 
   return {
-    omzet,
-    profit,
+    omzet: decimalToString(omzetAggregate._sum.subtotal) ?? "0.00",
+    profit: decimalToString(profitDecimal) ?? "0.00",
     transactionCount,
   };
 }

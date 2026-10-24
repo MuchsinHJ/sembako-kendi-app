@@ -168,9 +168,9 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
           ],
         });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
       expect(res.body.success).toBe(false);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.code).toBe('BUSINESS_RULE_VIOLATION');
     });
 
     it('AC-05: BR-08 - Transaksi UTANG tanpa nomor HP berhasil (noHpPembeli opsional)', async () => {
@@ -271,21 +271,17 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
   });
 
   describe('GET /transactions - List Transactions', () => {
-    let transaction1Id: string;
-    let transaction2Id: string;
-
     beforeAll(async () => {
       // Create test transactions
-      const res1 = await request(app)
+      await request(app)
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           uangDiterima: 10000,
           items: [{ productId: testProductId, jumlah: 1 }],
         });
-      transaction1Id = res1.body.data.id;
 
-      const res2 = await request(app)
+      await request(app)
         .post('/api/v1/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
@@ -294,7 +290,6 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
           noHpPembeli: '081234567890',
           items: [{ productId: testProductId, jumlah: 2 }],
         });
-      transaction2Id = res2.body.data.id;
     });
 
     it('AC-06: List transaksi dengan pagination', async () => {
@@ -320,7 +315,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      res.body.data.data.forEach((tx: any) => {
+      res.body.data.data.forEach((tx: { statusPembayaran: string }) => {
         expect(tx.statusPembayaran).toBe('LUNAS');
       });
     });
@@ -331,7 +326,7 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
-      res.body.data.data.forEach((tx: any) => {
+      res.body.data.data.forEach((tx: { statusTransaksi: string }) => {
         expect(tx.statusTransaksi).toBe('AKTIF');
       });
     });

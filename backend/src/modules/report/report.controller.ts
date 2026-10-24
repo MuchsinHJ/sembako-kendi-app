@@ -7,6 +7,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { sendSuccess } from "../../utils/response.js";
 import type { ReportQuery, ExportQuery } from "./report.schema.js";
 import {
   getSalesReport,
@@ -31,11 +32,7 @@ export const getSales = asyncHandler(
     const query = req.query as ReportQuery;
     const data = await getSalesReport(query);
 
-    res.json({
-      success: true,
-      data,
-      message: "Laporan penjualan berhasil dimuat",
-    });
+    sendSuccess(res, 200, data, "Laporan penjualan berhasil dimuat");
   },
 );
 
@@ -49,11 +46,7 @@ export const getDebts = asyncHandler(
     const query = req.query as ReportQuery;
     const data = await getDebtsReport(query);
 
-    res.json({
-      success: true,
-      data,
-      message: "Laporan utang berhasil dimuat",
-    });
+    sendSuccess(res, 200, data, "Laporan utang berhasil dimuat");
   },
 );
 
@@ -67,11 +60,7 @@ export const getProductTrend = asyncHandler(
     const query = req.query as ReportQuery;
     const data = await getProductTrendService(query);
 
-    res.json({
-      success: true,
-      data,
-      message: "Tren produk berhasil dimuat",
-    });
+    sendSuccess(res, 200, data, "Tren produk berhasil dimuat");
   },
 );
 

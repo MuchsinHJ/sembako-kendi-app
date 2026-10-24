@@ -45,10 +45,11 @@ export class NotFoundError extends AppError {
 
 /**
  * Base class untuk pelanggaran business rule.
- * Error spesifik (7.4) meng-extend class ini.
+ * Error spesifik (7.4) meng-extend class ini dan boleh mempersempit `code`
+ * (mis. `ProductHasTransactionError` → `PRODUCT_HAS_TRANSACTION`, SDD §5.3).
  */
 export class BusinessRuleError extends AppError {
-  public readonly code = 'BUSINESS_RULE_VIOLATION';
+  public readonly code: string = 'BUSINESS_RULE_VIOLATION';
   public readonly statusCode = 422;
 }
 
@@ -111,8 +112,16 @@ export class DebtOverpaymentError extends BusinessRuleError {
   }
 }
 
-/** BR-12 / AC-02: Produk yang sudah terlibat transaksi tidak bisa dihapus */
+/**
+ * BR-12 / AC-02: Produk yang sudah terlibat transaksi tidak bisa dihapus.
+ *
+ * Memakai `code` khusus `PRODUCT_HAS_TRANSACTION` (bukan
+ * `BUSINESS_RULE_VIOLATION` generik) agar sesuai SDD §5.3 dan frontend dapat
+ * membedakan kasus ini; HTTP status tetap 422 seperti business rule lainnya.
+ */
 export class ProductHasTransactionError extends BusinessRuleError {
+  public override readonly code = 'PRODUCT_HAS_TRANSACTION';
+
   constructor(
     message: string = 'Produk tidak dapat dihapus karena sudah memiliki riwayat transaksi.',
   ) {

@@ -6,6 +6,7 @@
 
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
+import { config } from '../src/config/env.js';
 
 const prisma = new PrismaClient();
 
@@ -17,10 +18,9 @@ async function main() {
   await prisma.session.deleteMany();
   await prisma.user.deleteMany();
 
-  // Hash password dengan salt rounds dari env (default 10)
-  const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10);
+  // Hash password dengan salt rounds dari config tervalidasi (SDD §9.2)
   const password = 'password123'; // Password default untuk testing
-  const passwordHash = await bcrypt.hash(password, saltRounds);
+  const passwordHash = await bcrypt.hash(password, config.BCRYPT_SALT_ROUNDS);
 
   // Seed users
   const testUser = await prisma.user.create({

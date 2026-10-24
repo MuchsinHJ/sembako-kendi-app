@@ -13,13 +13,13 @@ import type { Readable } from "stream";
 
 interface SalesExportData {
   periode: { start: string; end: string };
-  omzet: number;
-  profit: number;
+  omzet: string;
+  profit: string;
   transactionCount: number;
   transactions: Array<{
     id: string;
     tanggal: Date;
-    total: number;
+    total: string;
     statusPembayaran: string;
     namaPembeli: string | null;
   }>;
@@ -27,19 +27,19 @@ interface SalesExportData {
 
 interface DebtExportData {
   periode: { start: string; end: string };
-  totalSaldoUtang: number;
+  totalSaldoUtang: string;
   debtCount: number;
   debts: Array<{
     id: string;
     tanggal: Date;
-    total: number;
+    total: string;
     namaPembeli: string;
     noHpPembeli: string | null;
-    sisaSaldoUtang: number;
+    sisaSaldoUtang: string;
     payments: Array<{
       tanggalBayar: Date;
-      jumlahBayar: number;
-      saldoSetelahBayar: number;
+      jumlahBayar: string;
+      saldoSetelahBayar: string;
     }>;
   }>;
 }

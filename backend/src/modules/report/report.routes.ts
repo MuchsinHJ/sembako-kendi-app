@@ -7,7 +7,7 @@
 
 import { Router } from "express";
 import { authenticate } from "../../middlewares/auth.middleware.js";
-import { validate } from "../../middlewares/validate.js";
+import { validate } from "../../middlewares/validate.middleware.js";
 import { reportQuerySchema, exportQuerySchema } from "./report.schema.js";
 import {
   getSales,

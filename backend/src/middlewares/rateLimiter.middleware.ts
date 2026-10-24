@@ -1,43 +1,40 @@
 /**
- * middlewares/rateLimiter.ts
+ * middlewares/rateLimiter.middleware.ts
  * Konfigurasi rate limiter sesuai SDD §6.6.
  *
- * - globalLimiter  : 100 request / menit / IP — dipasang di semua route
+ * - globalLimiter  : RATE_LIMIT_MAX request / RATE_LIMIT_WINDOW_MS / IP (default 100/menit)
  * - loginLimiter   : 5 request / menit / IP   — khusus POST /auth/login
  * - uploadLimiter  : 10 request / menit / user — khusus POST /products/:id/photo
  *
- * Response saat limit tercapai menggunakan format error standar (SDD §5.1).
+ * Response saat limit tercapai menggunakan format error standar (SDD §5.1)
+ * dengan `code: "RATE_LIMIT_EXCEEDED"` dan HTTP status 429.
  */
 
 import { rateLimit } from 'express-rate-limit';
 import { config } from '../config/env.js';
 
-const rateLimitResponse = (code: string, message: string) => ({
+const rateLimitResponse = (message: string) => ({
   success: false,
-  error: { code, message },
+  error: { code: 'RATE_LIMIT_EXCEEDED', message },
 });
 
-// ─── Global (100 req/min/IP) ──────────────────────────────────────────────────
+// ─── Global (RATE_LIMIT_MAX req / RATE_LIMIT_WINDOW_MS / IP) ─────────────────
 export const globalLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 100,
+  windowMs: config.RATE_LIMIT_WINDOW_MS,
+  limit: config.RATE_LIMIT_MAX,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
-  message: rateLimitResponse(
-    'RATE_LIMIT_EXCEEDED',
-    'Terlalu banyak request. Coba lagi nanti.',
-  ),
+  message: rateLimitResponse('Terlalu banyak request. Coba lagi nanti.'),
   skip: () => config.NODE_ENV === 'test',
 });
 
 // ─── Login (5 req/min/IP, anti brute-force) ──────────────────────────────────
 export const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 5,
+  limit: 5,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: rateLimitResponse(
-    'RATE_LIMIT_EXCEEDED',
     'Terlalu banyak percobaan login. Coba lagi setelah 1 menit.',
   ),
   // Skip successful login agar counter reset
@@ -45,7 +42,8 @@ export const loginLimiter = rateLimit({
   // Skip rate limiting di test environment (kecuali untuk test brute-force spesifik)
   skip: (req) => {
     // Hanya skip jika bukan test brute-force
-    const isBruteForceTest = (req.body as { email?: string })?.email === 'brute@example.com';
+    const isBruteForceTest =
+      (req.body as { email?: string } | undefined)?.email === 'brute@example.com';
     return config.NODE_ENV === 'test' && !isBruteForceTest;
   },
 });
@@ -53,29 +51,19 @@ export const loginLimiter = rateLimit({
 // ─── Upload foto (10 req/min/user) ────────────────────────────────────────────
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  limit: 10,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   skip: () => config.NODE_ENV === 'test',
-  // Key berdasarkan user ID (jika tersedia) atau IP.
-  // Jika user ID tidak tersedia (auth belum Fase 4), fallback ke IP.
-  // ipKeyGenerator tidak dipakai di sini karena req.user tersedia di Fase 4+
-  // sehingga mayoritas request akan menggunakan userId sebagai key.
-  // Untuk mencegah ERR_ERL_KEY_GEN_IPV6, gunakan ipKeyGenerator sebagai fallback.
+  // Key berdasarkan user ID (tersedia setelah `authenticate`), fallback ke IP.
   keyGenerator: (req) => {
-    // req.user di-set oleh auth.middleware — akan tersedia saat Fase 4
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (req as any).user?.id as string | undefined;
-    if (userId) return userId;
-    // Fallback to IP address with IPv6 normalization
+    if (req.user?.id) return req.user.id;
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    // Normalize IPv6 loopback to IPv4 for consistency
     return ip === '::1' ? '127.0.0.1' : ip;
   },
   message: rateLimitResponse(
-    'RATE_LIMIT_EXCEEDED',
     'Terlalu banyak upload. Coba lagi setelah 1 menit.',
   ),
-  // Suppress ERR_ERL_KEY_GEN_IPV6 warning karena kita sudah normalize IPv6 di atas
-  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  // IPv6 sudah dinormalisasi manual di atas
+  validate: { keyGeneratorIpFallback: false },
 });

@@ -6,7 +6,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { config } from '../config/env.js';
-import { UnauthorizedError, ForbiddenError } from '../utils/errors.js';
+import { UnauthorizedError } from '../utils/errors.js';
 import * as authService from '../modules/auth/auth.service.js';
 
 /**

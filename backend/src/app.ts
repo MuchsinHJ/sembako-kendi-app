@@ -24,8 +24,8 @@ const createPinoHttp = (pinoHttp as any).default ?? pinoHttp;
 
 import { config } from "./config/env.js";
 import { logger } from "./config/logger.js";
-import { globalLimiter } from "./middlewares/rateLimiter.js";
-import { errorHandler } from "./middlewares/errorHandler.js";
+import { globalLimiter } from "./middlewares/rateLimiter.middleware.js";
+import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 
 // ─── Buat aplikasi Express ────────────────────────────────────────────────────
 
@@ -64,7 +64,6 @@ app.use(cookieParser());
 
 // ─── 7. Request logger (pino-http, dengan request ID) ────────────────────────
 app.use(
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   createPinoHttp({
     logger,
     // Jangan log request ke /health agar tidak bising di monitoring
@@ -78,7 +77,6 @@ app.use(
       const existing = req.id as string | undefined;
       if (existing) return existing;
       const id = crypto.randomUUID();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       res.setHeader("X-Request-Id", id);
       return id;
     },
@@ -137,7 +135,6 @@ app.use((_req: Request, res: Response) => {
 });
 
 // ─── 10. Global error handler (HARUS 4 parameter) ────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   errorHandler(err, req, res, next);
 });

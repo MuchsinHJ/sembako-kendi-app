@@ -10,7 +10,8 @@ import pino from "pino";
 import { config } from "./env.js";
 
 export const logger = pino({
-  level: config.IS_PRODUCTION ? "info" : "debug",
+  // LOG_LEVEL dari env (SDD §9.2); fallback: info di production, debug di dev/test.
+  level: config.LOG_LEVEL ?? (config.IS_PRODUCTION ? "info" : "debug"),
 
   // Pretty-print hanya di development (membutuhkan pino-pretty).
   // Di production, properti transport tidak dikirim sama sekali.

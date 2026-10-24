@@ -224,17 +224,21 @@ describe('Auth Endpoints (JWT Strategy)', () => {
         });
 
       expect(loginRes.status).toBe(200);
-      
+
       const setCookieHeader = loginRes.get('set-cookie');
       expect(setCookieHeader).toBeDefined();
-      
+
+      const accessToken = loginRes.body.data?.accessToken as string | undefined;
+      expect(accessToken).toBeDefined();
+
       const cookies = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
       const refreshCookie = cookies.find((c: string) => c.startsWith('refreshToken='));
       expect(refreshCookie).toBeDefined();
-      
-      // 2. Logout
+
+      // 2. Logout (SDD §5.1: wajib access token)
       const logoutRes = await request(app)
         .post('/api/v1/auth/logout')
+        .set('Authorization', `Bearer ${accessToken}`)
         .set('Cookie', refreshCookie!)
         .send({});
 
@@ -249,6 +253,14 @@ describe('Auth Endpoints (JWT Strategy)', () => {
 
       expect(refreshRes.status).toBe(401);
       expect(refreshRes.body.success).toBe(false);
+    });
+
+    it('logout tanpa access token → 401 UNAUTHORIZED', async () => {
+      const res = await request(app).post('/api/v1/auth/logout').send({});
+
+      expect(res.status).toBe(401);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('UNAUTHORIZED');
     });
   });
 

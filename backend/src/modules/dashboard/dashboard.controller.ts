@@ -8,6 +8,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { getDashboardSummary } from "./dashboard.service.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { sendSuccess } from "../../utils/response.js";
 import type { DashboardSummaryQuery } from "./dashboard.schema.js";
 
 /**
@@ -22,10 +23,6 @@ export const getSummary = asyncHandler(
     const query = req.query as DashboardSummaryQuery;
     const data = await getDashboardSummary(query);
 
-    res.json({
-      success: true,
-      data,
-      message: "Dashboard summary berhasil dimuat",
-    });
+    sendSuccess(res, 200, data, "Dashboard summary berhasil dimuat");
   },
 );

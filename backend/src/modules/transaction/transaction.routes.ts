@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express';
-import { validate } from '../../middlewares/validate.js';
+import { validate } from '../../middlewares/validate.middleware.js';
 import { authenticate } from '../../middlewares/auth.middleware.js';
 import * as transactionController from './transaction.controller.js';
 import * as transactionSchema from './transaction.schema.js';

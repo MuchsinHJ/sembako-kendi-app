@@ -17,6 +17,28 @@
   },
   "item": [
     {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            },
+            "description": "Health check publik (tanpa auth). Dipakai load balancer / uptime monitor.\n\nResponse: { success: true, data: { status, environment, timestamp } }\n\nReferensi: SDD Lampiran C"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Auth",
       "item": [
         {
@@ -207,7 +229,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nama\": \"Beras Premium 5kg\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": 75000,\n  \"hargaModal\": 65000,\n  \"stok\": 50,\n  \"stokMinimum\": 10\n}"
+              "raw": "{\n  \"nama\": \"Beras Premium 5kg\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": \"75000\",\n  \"hargaModal\": \"65000\",\n  \"stok\": 50,\n  \"stokMinimum\": 10\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/products",
@@ -230,7 +252,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nama\": \"Beras Premium 5kg Updated\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": 77000,\n  \"hargaModal\": 67000,\n  \"stok\": 45,\n  \"stokMinimum\": 10\n}"
+              "raw": "{\n  \"nama\": \"Beras Premium 5kg Updated\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": \"77000\",\n  \"hargaModal\": \"67000\",\n  \"stokMinimum\": 10\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/products/:id",
@@ -355,7 +377,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"adjustment\": 10,\n  \"reason\": \"Stok opname - koreksi selisih fisik\"\n}"
+              "raw": "{\n  \"delta\": 10,\n  \"alasan\": \"Stok opname - koreksi selisih fisik\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/products/:id/stock-adjustment",
@@ -369,7 +391,7 @@
                 }
               ]
             },
-            "description": "Penyesuaian stok manual dengan alasan (untuk audit)\nadjustment: positif untuk tambah, negatif untuk kurangi\n\nReferensi: BR-04, FR-15"
+            "description": "Penyesuaian stok manual dengan alasan (untuk audit)\ndelta: bilangan bulat != 0; positif untuk tambah, negatif untuk kurangi\nalasan: wajib, dicatat di tabel StockAdjustment\n\nReferensi: BR-04, FR-15"
           },
           "response": []
         },

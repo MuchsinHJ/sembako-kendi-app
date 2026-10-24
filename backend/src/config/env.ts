@@ -27,11 +27,17 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
-  // Session (opsional — hanya jika AUTH_STRATEGY=session)
-  SESSION_SECRET: z.string().min(16, 'SESSION_SECRET minimal 16 karakter').optional(),
-
   // Security
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10, 'BCRYPT_SALT_ROUNDS minimal 10').default(10),
+
+  // Rate limiting (SDD §6.6, §9.2)
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 1000),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+
+  // Logging (SDD §9.2)
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+    .optional(),
 
   // CORS
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
@@ -74,11 +80,9 @@ if (env.AUTH_STRATEGY === 'jwt') {
   }
 }
 
-// Validasi lintas-field: SESSION_SECRET wajib ada jika AUTH_STRATEGY=session
-if (env.AUTH_STRATEGY === 'session' && !env.SESSION_SECRET) {
-  console.error('\n❌ AUTH_STRATEGY=session membutuhkan SESSION_SECRET\n');
-  process.exit(1);
-}
+// Catatan: strategi session memakai ID acak opaque yang disimpan di tabel
+// `Session` (bukan cookie bertanda tangan), sehingga tidak memerlukan
+// SESSION_SECRET maupun library `express-session`. Lihat SDD §3.2.
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
@@ -92,8 +96,10 @@ export const config = {
   JWT_REFRESH_SECRET: env.JWT_REFRESH_SECRET,
   JWT_ACCESS_EXPIRES_IN: env.JWT_ACCESS_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN: env.JWT_REFRESH_EXPIRES_IN,
-  SESSION_SECRET: env.SESSION_SECRET,
   BCRYPT_SALT_ROUNDS: env.BCRYPT_SALT_ROUNDS,
+  RATE_LIMIT_WINDOW_MS: env.RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_MAX: env.RATE_LIMIT_MAX,
+  LOG_LEVEL: env.LOG_LEVEL,
   ALLOWED_ORIGINS: env.ALLOWED_ORIGINS,
   MAX_UPLOAD_SIZE_BYTES: env.MAX_UPLOAD_SIZE_MB * 1024 * 1024,
   R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,

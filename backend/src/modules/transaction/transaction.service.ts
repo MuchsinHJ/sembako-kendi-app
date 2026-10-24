@@ -18,9 +18,11 @@ import {
   NotFoundError,
   ValidationError,
   BusinessRuleError,
+  MissingDebtorInfoError,
   StockExceededError,
   VoidWindowExpiredError,
 } from '../../utils/errors.js';
+import { isSameCalendarDay } from '../../utils/date.js';
 import type {
   CreateTransactionInput,
   ListTransactionsQuery,
@@ -31,12 +33,11 @@ import type {
 /**
  * Void window configuration (BR-13).
  * Default: transaksi hanya bisa di-void dalam hari kalender yang sama dengan createdAt,
- * dihitung dengan zona Asia/Jakarta sesuai contoh SRS.
- * 
+ * dihitung dengan zona Asia/Jakarta sesuai contoh SRS (lihat utils/date.ts).
+ *
  * Open Question: Apakah perlu konfigurasi yang lebih fleksibel (misal: 24 jam dari createdAt)?
  * Untuk sementara ikuti interpretasi konservatif: hari kalender yang sama.
  */
-const VOID_WINDOW_TIMEZONE = 'Asia/Jakarta';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -170,8 +171,8 @@ export const createTransaction = async (
     // BR-08: Transaksi yang belum lunas wajib menyimpan nama pembeli
     // (noHpPembeli opsional) agar dapat ditelusuri.
     if (!isLunas && !input.namaPembeli?.trim()) {
-      throw new ValidationError(
-        'Nama pembeli wajib diisi karena uang diterima kurang dari total transaksi (transaksi Utang)',
+      throw new MissingDebtorInfoError(
+        'Nama pembeli wajib diisi karena uang diterima kurang dari total transaksi (transaksi Utang).',
       );
     }
 
@@ -409,11 +410,7 @@ export const voidTransaction = async (
 
   // BR-13: Validasi void window (hari kalender yang sama, zona Asia/Jakarta)
   const now = new Date();
-  const isWithinVoidWindow = isSameDayInTimezone(
-    transaction.createdAt,
-    now,
-    VOID_WINDOW_TIMEZONE,
-  );
+  const isWithinVoidWindow = isSameCalendarDay(transaction.createdAt, now);
 
   if (!isWithinVoidWindow) {
     throw new VoidWindowExpiredError(
@@ -492,27 +489,3 @@ export const voidTransaction = async (
 
   return voidedTransaction;
 };
-
-// ─── Helper Functions ─────────────────────────────────────────────────────────
-
-/**
- * Check if two dates are in the same calendar day in a specific timezone.
- * Uses Intl.DateTimeFormat to handle timezone conversion properly.
- */
-function isSameDayInTimezone(
-  date1: Date,
-  date2: Date,
-  timezone: string,
-): boolean {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
-  const dateStr1 = formatter.format(date1); // Format: YYYY-MM-DD
-  const dateStr2 = formatter.format(date2);
-
-  return dateStr1 === dateStr2;
-}

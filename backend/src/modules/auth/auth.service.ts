@@ -271,7 +271,7 @@ export const verifyAccessToken = (token: string) => {
       email: string;
       nama: string;
     };
-  } catch (err) {
+  } catch {
     throw new UnauthorizedError('Access token tidak valid atau kedaluwarsa.');
   }
 };

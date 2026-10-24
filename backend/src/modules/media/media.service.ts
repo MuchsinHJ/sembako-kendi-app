@@ -5,14 +5,17 @@
  */
 
 import sharp from 'sharp';
-import { randomUUID } from 'crypto';
 import { prisma } from '../../config/db.js';
+import { logger } from '../../config/logger.js';
 import type { IObjectStorage } from '../product/storage.interface.js';
 import { R2ObjectStorage } from '../../repositories/storage.repository.js';
-import { NotFoundError, ValidationError, StorageError } from '../../utils/errors.js';
-import pino from 'pino';
-
-const logger = pino();
+import {
+  NotFoundError,
+  ValidationError,
+  StorageError,
+  InvalidFileTypeError,
+} from '../../utils/errors.js';
+import { makeProductPhotoKey } from '../../utils/objectKey.js';
 
 // Singleton storage instance
 const storage: IObjectStorage = new R2ObjectStorage();
@@ -41,11 +44,11 @@ export const uploadProductPhoto = async (
     throw new NotFoundError('Produk tidak ditemukan.');
   }
 
-  // 2. Validasi MIME type
+  // 2. Validasi MIME type (lapisan kedua setelah Multer fileFilter) → 415
   if (!ALLOWED_MIME_TYPES.includes(mimetype)) {
-    throw new ValidationError('Format file tidak didukung. Gunakan JPEG, PNG, atau WebP.', [
-      { field: 'photo', issue: 'Invalid MIME type' },
-    ]);
+    throw new InvalidFileTypeError(
+      `Format file tidak didukung: ${mimetype}. Gunakan JPEG, PNG, atau WebP.`,
+    );
   }
 
   // 3. Verifikasi file adalah gambar valid dengan Sharp
@@ -53,7 +56,7 @@ export const uploadProductPhoto = async (
   try {
     metadata = await sharp(fileBuffer).metadata();
   } catch (error) {
-    logger.warn({ error }, 'File gagal dibaca oleh Sharp');
+    logger.warn({ error, productId }, 'File gagal dibaca oleh Sharp');
     throw new ValidationError('File bukan gambar valid atau corrupt.', [
       { field: 'photo', issue: 'Cannot read image metadata' },
     ]);
@@ -75,13 +78,12 @@ export const uploadProductPhoto = async (
     // Convert to WebP dengan quality 80
     processedBuffer = await sharpInstance.webp({ quality: QUALITY }).toBuffer();
   } catch (error) {
-    logger.error({ error }, 'Sharp processing failed');
+    logger.error({ error, productId }, 'Sharp processing failed');
     throw new StorageError('Gagal memproses gambar.');
   }
 
   // 5. Generate object key: products/{productId}/{uuid}.webp
-  const uuid = randomUUID();
-  const key = `products/${productId}/${uuid}.webp`;
+  const key = makeProductPhotoKey(productId);
 
   // 6. Upload ke R2 (throw StorageError jika gagal)
   const fotoUrl = await storage.uploadImage(key, processedBuffer, 'image/webp');

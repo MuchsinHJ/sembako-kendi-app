@@ -1,6 +1,7 @@
 /**
  * tests/api/product.test.ts
- * API tests untuk product endpoints (AC-01, AC-02, AC-03)
+ * API tests untuk product endpoints.
+ * Cakupan: FR-06–FR-15, BR-03, BR-04, BR-12, BR-15, AC-01, AC-02, AC-03.
  */
 
 import request from 'supertest';
@@ -26,8 +27,8 @@ beforeAll(async () => {
   testUserId = loginRes.body.data.user.id;
 });
 
-describe('Product API (AC-01, AC-02, AC-03)', () => {
-  describe('AC-01: CRUD Produk', () => {
+describe('Product API (FR-06–FR-15, AC-01–AC-03)', () => {
+  describe('FR-06–FR-09: CRUD Produk (BR-03, BR-12)', () => {
     let productId: string;
 
     it('POST /products - Membuat produk baru', async () => {
@@ -200,7 +201,7 @@ describe('Product API (AC-01, AC-02, AC-03)', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(deleteRes.status).toBe(422);
-      expect(deleteRes.body.error.code).toBe('BUSINESS_RULE_VIOLATION');
+      expect(deleteRes.body.error.code).toBe('PRODUCT_HAS_TRANSACTION');
       expect(deleteRes.body.error.message).toContain('riwayat transaksi');
 
       // Cleanup manual - delete in correct FK order
@@ -213,7 +214,7 @@ describe('Product API (AC-01, AC-02, AC-03)', () => {
     });
   });
 
-  describe('AC-02: Ambang Batas Stok', () => {
+  describe('FR-13/BR-15: Ambang Batas Stok', () => {
     let productId: string;
 
     beforeAll(async () => {
@@ -256,12 +257,14 @@ describe('Product API (AC-01, AC-02, AC-03)', () => {
       expect(res.body.data).toBeInstanceOf(Array);
 
       // Produk kita seharusnya muncul (stok=5, stokMinimum=15)
-      const found = res.body.data.find((p: any) => p.id === productId);
+      const found = (res.body.data as Array<{ id: string }>).find(
+        (p) => p.id === productId,
+      );
       expect(found).toBeDefined();
     });
   });
 
-  describe('AC-03: Penyesuaian Stok Manual', () => {
+  describe('FR-15/BR-04: Penyesuaian Stok Manual', () => {
     let productId: string;
 
     beforeAll(async () => {

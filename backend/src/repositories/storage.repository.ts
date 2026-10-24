@@ -8,9 +8,7 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client
 import type { IObjectStorage } from '../modules/product/storage.interface.js';
 import { StorageError } from '../utils/errors.js';
 import { config } from '../config/env.js';
-import pino from 'pino';
-
-const logger = pino();
+import { logger } from '../config/logger.js';
 
 export class R2ObjectStorage implements IObjectStorage {
   private client: S3Client;
@@ -82,7 +80,7 @@ export class R2ObjectStorage implements IObjectStorage {
    * Generate signed URL untuk akses private (tidak dipakai di fase ini).
    * R2 public bucket bisa langsung pakai URL public.
    */
-  async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+  async getSignedUrl(key: string, _expiresIn: number = 3600): Promise<string> {
     // Untuk fase ini, kita pakai public URL langsung
     return `${this.publicUrl}/${key}`;
   }
