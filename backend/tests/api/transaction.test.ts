@@ -458,6 +458,35 @@ describe('Transaction API (AC-04 hingga AC-08)', () => {
       expect(res.body.error.code).toBe('BUSINESS_RULE_VIOLATION');
     });
 
+    it('AC-08: BR-13 - Void transaksi lebih dari 24 jam ditolak 422', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/transactions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          uangDiterima: 10000,
+          items: [{ productId: testProductId, jumlah: 1 }],
+        });
+      const transactionId = createRes.body.data.id;
+
+      // Mundurkan createdAt 25 jam → melewati window 24 jam
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: { createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
+      });
+
+      const res = await request(app)
+        .post(`/api/v1/transactions/${transactionId}/void`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('BUSINESS_RULE_VIOLATION');
+      expect(res.body.error.message).toContain('24 jam');
+
+      // Cleanup agar tidak mengganggu assertion riwayat/laporan
+      await prisma.detailTransaction.deleteMany({ where: { transactionId } });
+      await prisma.transaction.delete({ where: { id: transactionId } });
+    });
+
     it('Transaksi tidak ditemukan return 404', async () => {
       const res = await request(app)
         .post('/api/v1/transactions/00000000-0000-0000-0000-000000000000/void')

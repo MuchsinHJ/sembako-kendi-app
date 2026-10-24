@@ -134,3 +134,185 @@ describe('Database CHECK Constraints', () => {
     await prisma.user.delete({ where: { id: user.id } });
   });
 });
+
+/**
+ * CHECK constraint konsinyasi (Fitur Penitipan Barang — Tahap 1).
+ * Defense in depth: aturan BR-A & BR-C juga ditegakkan di level database.
+ */
+describe('Database CHECK Constraints — Konsinyasi', () => {
+  const CONSIGNOR_NAME = '__constraint_test_consignor__';
+
+  const cleanup = async () => {
+    const consignor = await prisma.consignor.findFirst({
+      where: { nama: CONSIGNOR_NAME },
+    });
+    if (!consignor) return;
+
+    const products = await prisma.product.findMany({
+      where: { consignorId: consignor.id },
+      select: { id: true },
+    });
+    const productIds = products.map((p) => p.id);
+
+    if (productIds.length > 0) {
+      await prisma.consignmentMovement.deleteMany({
+        where: { productId: { in: productIds } },
+      });
+      await prisma.product.deleteMany({ where: { id: { in: productIds } } });
+    }
+
+    await prisma.consignor.delete({ where: { id: consignor.id } });
+  };
+
+  beforeAll(async () => {
+    await cleanup();
+  });
+
+  afterAll(async () => {
+    await cleanup();
+    await prisma.$disconnect();
+  });
+
+  it('should reject Product TITIPAN without consignorId (BR-A)', async () => {
+    await expect(
+      prisma.product.create({
+        data: {
+          nama: 'Titipan Tanpa Penitip (constraint)',
+          kategori: 'Test',
+          hargaJual: 100,
+          hargaModal: 50,
+          stok: 1,
+          stokMinimum: 0,
+          tipe: 'TITIPAN',
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('should reject Product MILIK_SENDIRI with consignorId (BR-A)', async () => {
+    const consignor = await prisma.consignor.create({
+      data: { nama: CONSIGNOR_NAME },
+    });
+
+    await expect(
+      prisma.product.create({
+        data: {
+          nama: 'Milik Sendiri Dengan Penitip (constraint)',
+          kategori: 'Test',
+          hargaJual: 100,
+          hargaModal: 50,
+          stok: 1,
+          stokMinimum: 0,
+          tipe: 'MILIK_SENDIRI',
+          consignorId: consignor.id,
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('should reject ConsignmentMovement with jumlah <= 0 (BR-C)', async () => {
+    const consignor = await prisma.consignor.create({
+      data: { nama: CONSIGNOR_NAME },
+    });
+
+    const product = await prisma.product.create({
+      data: {
+        nama: 'Titipan Movement Constraint',
+        kategori: 'Test',
+        hargaJual: 100,
+        hargaModal: 50,
+        stok: 0,
+        stokMinimum: 0,
+        tipe: 'TITIPAN',
+        consignorId: consignor.id,
+      },
+    });
+
+    const user = await prisma.user.findFirst();
+    expect(user).not.toBeNull();
+
+    await expect(
+      prisma.consignmentMovement.create({
+        data: {
+          consignorId: consignor.id,
+          productId: product.id,
+          tipe: 'TERIMA',
+          jumlah: 0,
+          stokSebelum: 0,
+          stokSesudah: 0,
+          dicatatOlehId: user!.id,
+        },
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+/**
+ * CHECK constraint setoran ke penitip (Fitur Penitipan Barang — Tahap 2).
+ * Defense in depth: BR-D juga ditegakkan di level database.
+ */
+describe('Database CHECK Constraints — Setoran Penitip', () => {
+  const CONSIGNOR_NAME = '__constraint_test_payment__';
+
+  const cleanup = async () => {
+    const consignor = await prisma.consignor.findFirst({
+      where: { nama: CONSIGNOR_NAME },
+    });
+    if (!consignor) return;
+
+    await prisma.consignorPayment.deleteMany({
+      where: { consignorId: consignor.id },
+    });
+    await prisma.consignor.delete({ where: { id: consignor.id } });
+  };
+
+  beforeAll(async () => {
+    await cleanup();
+  });
+
+  afterAll(async () => {
+    await cleanup();
+    await prisma.$disconnect();
+  });
+
+  it('should reject ConsignorPayment with jumlahBayar <= 0 (BR-D)', async () => {
+    const consignor = await prisma.consignor.create({
+      data: { nama: CONSIGNOR_NAME },
+    });
+
+    const user = await prisma.user.findFirst();
+    expect(user).not.toBeNull();
+
+    await expect(
+      prisma.consignorPayment.create({
+        data: {
+          consignorId: consignor.id,
+          jumlahBayar: 0,
+          saldoSetelahBayar: 0,
+          dicatatOlehId: user!.id,
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('should reject ConsignorPayment with negative jumlahBayar (BR-D)', async () => {
+    const consignor = await prisma.consignor.findFirst({
+      where: { nama: CONSIGNOR_NAME },
+    });
+    expect(consignor).not.toBeNull();
+
+    const user = await prisma.user.findFirst();
+    expect(user).not.toBeNull();
+
+    await expect(
+      prisma.consignorPayment.create({
+        data: {
+          consignorId: consignor!.id,
+          jumlahBayar: -1,
+          saldoSetelahBayar: 1,
+          dicatatOlehId: user!.id,
+        },
+      }),
+    ).rejects.toThrow();
+  });
+});

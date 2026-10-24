@@ -118,6 +118,14 @@ app.use("/api/v1/transactions", transactionRouter);
 import debtRouter from "./modules/debt/debt.routes.js";
 app.use("/api/v1/debts", debtRouter);
 
+// Consignment routes (Fitur Penitipan Barang — Tahap 1)
+import {
+  consignorsRouter,
+  consignmentRouter,
+} from "./modules/consignment/consignment.routes.js";
+app.use("/api/v1/consignors", consignorsRouter);
+app.use("/api/v1/consignment", consignmentRouter);
+
 // Dashboard routes (Fase 9)
 import dashboardRouter from "./modules/dashboard/dashboard.routes.js";
 app.use("/api/v1/dashboard", dashboardRouter);

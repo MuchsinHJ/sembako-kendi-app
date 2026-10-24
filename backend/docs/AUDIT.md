@@ -1,7 +1,7 @@
 # AUDIT AKHIR — Kendi's Market Backend MVP
 
-**Versi:** 1.1  
-**Tanggal Audit:** 2026-10-24 (revisi akhir setelah audit konformansi SDD)  
+**Versi:** 1.2  
+**Tanggal Audit:** 2026-10-24 (revisi akhir setelah audit konformansi SDD + Fitur Penitipan Barang/Konsinyasi)  
 **Auditor:** Backend Development Team  
 **Status:** ✅ **COMPLETE & PRODUCTION-READY**
 
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai SDD v1.0 dan SRS v1.0. Seluruh FR (Functional Requirements), BR (Business Rules), dan AC (Acceptance Criteria) untuk MVP telah terpenuhi dengan **183/183 tests passing (100%) dalam 14 test suite** (setelah revisi FR-20/BR-08 — status pembayaran diturunkan dari `uangDiterima` — serta penambahan suite `media`, `dashboard`, dan `report`).
+Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai SDD v1.1, SRS v1.1, dan PRD Revisi 4. Seluruh FR (Functional Requirements), BR (Business Rules), dan AC (Acceptance Criteria) untuk MVP telah terpenuhi dengan **283/283 tests passing (100%) dalam 17 test suite** (setelah revisi FR-20/BR-08 — status pembayaran diturunkan dari `uangDiterima` — revisi BR-13 — void window 24 jam rolling (§6.8) — serta penambahan Fitur Penitipan Barang/Konsinyasi: FR-46–FR-49, BR-17–BR-26, AC-20–AC-26 (§6.9)).
 
 **Kesiapan Production:** ✅ Ready  
 **Test Coverage:** 85% (service layer, estimasi) — **Target >= 80% tercapai**  
@@ -17,7 +17,7 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 
 ---
 
-## 1. Checklist Functional Requirements (FR-01 hingga FR-45)
+## 1. Checklist Functional Requirements (FR-01 hingga FR-49)
 
 ### 1.1 Modul Autentikasi (FR-01 hingga FR-05)
 
@@ -74,8 +74,8 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 
 | ID | Requirement | Status | Lokasi Implementasi | Test |
 |----|-------------|--------|---------------------|------|
-| FR-25 | Void dalam batas waktu | ✅ Selesai | `transaction.service.ts` (`voidTransaction`) | `transaction.service.test.ts` (AC-07) |
-| FR-26 | Tolak void di luar batas waktu | ✅ Selesai | `transaction.service.ts` (`VoidWindowExpiredError`) | `transaction.service.test.ts` (AC-08) |
+| FR-25 | Void dalam batas waktu (24 jam sejak `createdAt`) | ✅ Selesai | `transaction.service.ts` (`voidTransaction`, `VOID_WINDOW_HOURS = 24`) | `transaction.service.test.ts` (AC-07, FR-25) |
+| FR-26 | Tolak void di luar batas waktu | ✅ Selesai | `transaction.service.ts` (`VoidWindowExpiredError`), `utils/date.ts` (`isWithinHoursWindow`) | `transaction.service.test.ts` (AC-08), `transaction.test.ts` (AC-08) |
 | FR-27 | Stok dikembalikan saat void | ✅ Selesai | `transaction.service.ts` (`$transaction`) | `transaction.service.test.ts` (AC-07) |
 | FR-28 | Status berubah DIBATALKAN | ✅ Selesai | `transaction.service.ts` (`statusTransaksi`, `dibatalkanPada`) | `transaction.service.test.ts` (AC-07) |
 | FR-29 | Void tetap di riwayat, dikecualikan dari laporan | ✅ Selesai | `transaction.service.ts`, `report.service.ts` (`statusTransaksi: AKTIF`) | `report.test.ts` (FR-39/AC-09), `dashboard.test.ts` |
@@ -119,11 +119,24 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 
 **Status Modul:** ✅ 100% Complete
 
-### **Summary FR:** ✅ 45/45 Complete (100%)
+### 1.8 Modul Konsinyasi / Penitipan Barang (FR-46 hingga FR-49)
+
+| ID | Requirement | Status | Lokasi Implementasi | Test |
+|----|-------------|--------|---------------------|------|
+| FR-46 | Kelola data penitip & produk titipan (filter tipe/penitip) | ✅ Selesai | `consignment.service.ts` (`listConsignors`, `createConsignor`, `updateConsignor`, `updateConsignorStatus`), `product.service.ts` (`createProduct`, `listProducts`, `updateProduct`) | `consignment.service.test.ts` (BR-A/B/E/G/H/J), `consignment.test.ts` |
+| FR-47 | Catat penerimaan & retur titipan + riwayat pergerakan | ✅ Selesai | `consignment.service.ts` (`createReceipt`, `createReturn`, `listMovements`) | `consignment.service.test.ts` (BR-C/BR-I), `consignment.test.ts` |
+| FR-48 | Saldo/kewajiban per penitip, catat & riwayat setoran | ✅ Selesai | `consignment.service.ts` (`getConsignorBalance`, `getSaldoMap`, `createConsignorPayment`, `listConsignorPayments`) | `consignment.balance.test.ts` (20 test), `consignment.test.ts` |
+| FR-49 | Laporan konsinyasi per periode + total kewajiban di dashboard | ✅ Selesai | `consignment.service.ts` (`getConsignmentReport`, `getTotalKewajibanPenitip`), `report.controller.ts`, `dashboard.service.ts` | `consignment.balance.test.ts` (konsistensi laporan ↔ saldo), `consignment.test.ts` |
+
+**Catatan:** FR-46–FR-49 ditambahkan sebagai penomoran lanjutan setelah FR-45; sejak SRS v1.1 requirement ini sudah resmi tercantum di SRS §4.9 (SDD §3.14, §11.16). Endpoint baru: `/consignors/*` (8) dan `/consignment/*` (3), plus `/reports/consignment`; `/products` dan `/dashboard/summary` diperluas tanpa breaking change.
+
+**Status Modul:** ✅ 100% Complete
+
+### **Summary FR:** ✅ 49/49 Complete (100%) — FR-01…FR-45 ditambah FR-46–FR-49 (revisi konsinyasi)
 
 ---
 
-## 2. Checklist Business Rules (BR-01 hingga BR-16)
+## 2. Checklist Business Rules (BR-01 hingga BR-26)
 
 | ID | Rule | Status | Implementasi | Test | Catatan |
 |----|------|--------|--------------|------|---------|
@@ -139,16 +152,26 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 | BR-10 | Snapshot harga per transaksi | ✅ Selesai | `transaction.service.ts` (`DetailTransaction` snapshot) | `transaction.service.test.ts` | — |
 | BR-11 | Profit = penjualan − modal | ✅ Selesai | `report.service.ts` | `report.test.ts` (FR-36) | Memakai snapshot |
 | BR-12 | Produk dengan riwayat tidak boleh dihapus permanen | ✅ Selesai | `product.service.ts` (`ProductHasTransactionError`) | `product.test.ts` (BR-12), `product.service.test.ts` | `code: PRODUCT_HAS_TRANSACTION`, 422 |
-| BR-13 | Void: batas waktu, kembalikan stok, status DIBATALKAN | ✅ Selesai | `transaction.service.ts` (`voidTransaction`) | `transaction.service.test.ts` (AC-07/AC-08) | Atomic |
+| BR-13 | Void: batas waktu 24 jam (rolling), kembalikan stok, status DIBATALKAN | ✅ Selesai | `transaction.service.ts` (`voidTransaction`, `VOID_WINDOW_HOURS`), `utils/date.ts` (`isWithinHoursWindow`) | `transaction.service.test.ts` (AC-07/AC-08), `transaction.test.ts` (AC-08) | Atomic |
 | BR-14 | Cicilan bertahap, auto-Lunas | ✅ Selesai | `debt.service.ts` (`recordPayment`, `DebtOverpaymentError`) | `debt.test.ts`, `debt.service.test.ts` | Row-level lock |
 | BR-15 | Ambang batas stok minimum | ✅ Selesai | `product.service.ts`, `dashboard.service.ts` | `product.test.ts`, `dashboard.test.ts` | Per produk |
 | BR-16 | Format Rupiah dengan pemisah ribuan | ✅ Selesai | `utils/money.ts` (`formatRupiah`) | Diuji lewat output ekspor | Hanya untuk ekspor, JSON memakai string desimal |
+| BR-17 | Produk `TITIPAN` wajib `consignorId`; `MILIK_SENDIRI` wajib `null`; `tipe`/`consignorId` immutable | ✅ Selesai | `schema.prisma` (CHECK `Product_tipe_consignor_check`), `product.schema.ts`, `product.service.ts` | `consignment.service.test.ts` (BR-A), `consignment.test.ts`, `constraints.test.ts` | Zod + service + DB CHECK |
+| BR-18 | `hargaJual >= hargaModal` (harga setor) pada produk titipan | ✅ Selesai | `product.service.ts` | `consignment.service.test.ts` (BR-B), `consignment.test.ts` | 422 `BUSINESS_RULE_VIOLATION` |
+| BR-19 | Penerimaan menambah stok; retur mengurangi dan tidak melebihi stok; append-only | ✅ Selesai | `consignment.service.ts` (`createReceipt`, `createReturn`), CHECK `ConsignmentMovement_jumlah_check` & `..._stokSesudah_check` | `consignment.service.test.ts` (BR-C/BR-I), `consignment.test.ts`, `constraints.test.ts` | Row lock `FOR UPDATE` |
+| BR-20 | Setoran `> 0` dan tidak melebihi saldo; saldo ≤ 0 menolak semua setoran | ✅ Selesai | `consignment.service.ts` (`createConsignorPayment`, `ConsignorOverpaymentError`) | `consignment.balance.test.ts` (termasuk concurrency), `consignment.test.ts`, `constraints.test.ts` | Lock `Consignor` + CHECK `ConsignorPayment_jumlahBayar_check` |
+| BR-21 | Consignor tidak di-hard-delete; nonaktif hanya bila semua produk titipan berstok 0 | ✅ Selesai | `consignment.service.ts` (`updateConsignorStatus`, `ConsignorHasStockError`), FK `RESTRICT` | `consignment.service.test.ts` (BR-E), `consignment.test.ts` | `details.products` pada 422 |
+| BR-22 | Void tetap diizinkan walau membuat saldo penitip negatif | ✅ Selesai | `transaction.service.ts` (`voidTransaction`), `consignment.service.ts` (`getConsignorBalance`/`getSaldoMap` — saldo diturunkan) | `consignment.balance.test.ts` (BR-F) | Saldo negatif ditampilkan apa adanya |
+| BR-23 | Consignor `NONAKTIF` tidak bisa produk baru/receipt/aktifkan produk; setoran tetap boleh | ✅ Selesai | `consignment.service.ts` (`ConsignorInactiveError`), `product.service.ts` | `consignment.service.test.ts` (BR-G), `consignment.balance.test.ts`, `consignment.test.ts` | — |
+| BR-24 | Produk `TITIPAN` hanya `NONAKTIF` bila stok 0; hanya `AKTIF` bila consignor `AKTIF` | ✅ Selesai | `product.service.ts` (`ProductHasStockError`) | `consignment.service.test.ts` (BR-H), `consignment.test.ts` | Produk `MILIK_SENDIRI` tidak terpengaruh |
+| BR-25 | `receipt` hanya untuk produk `TITIPAN` `AKTIF` milik consignor `AKTIF` | ✅ Selesai | `consignment.service.ts` (`ProductNotConsignmentError`, `ConsignorInactiveError`) | `consignment.service.test.ts` (BR-C/BR-I), `consignment.test.ts` | Dicek ulang dalam transaction |
+| BR-26 | Produk titipan dengan riwayat transaksi **atau** movement tidak dapat di-hard-delete | ✅ Selesai | `product.service.ts` (`ProductHasTransactionError`), FK `RESTRICT` | `consignment.service.test.ts` (BR-J), `consignment.test.ts` | `code: PRODUCT_HAS_TRANSACTION` |
 
-### **Summary BR:** ✅ 16/16 Complete (100%)
+### **Summary BR:** ✅ 26/26 Complete (100%) — BR-01…BR-16 ditambah BR-17–BR-26 (revisi konsinyasi)
 
 ---
 
-## 3. Checklist Acceptance Criteria (AC-01 hingga AC-17, termasuk AC-05a/AC-05b)
+## 3. Checklist Acceptance Criteria (AC-01 hingga AC-26, termasuk AC-05a/AC-05b)
 
 | ID | Criteria | Status | Test | Hasil |
 |----|----------|--------|------|-------|
@@ -161,7 +184,7 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 | AC-05b | Uang diterima < total → UTANG + sisa saldo, stok tetap berkurang | ✅ Pass | `transaction.test.ts`, `transaction.service.test.ts` | ✅ |
 | AC-06 | Stok berkurang & snapshot tersimpan | ✅ Pass | `transaction.test.ts` (AC-06), `transaction.service.test.ts` | ✅ |
 | AC-07 | Void berhasil dalam batas waktu & stok kembali | ✅ Pass | `transaction.service.test.ts` (AC-07) | ✅ |
-| AC-08 | Void ditolak di luar batas waktu / sudah dibatalkan | ✅ Pass | `transaction.service.test.ts` (AC-08) | ✅ |
+| AC-08 | Void ditolak di luar batas waktu (24 jam) / sudah dibatalkan | ✅ Pass | `transaction.service.test.ts` (AC-08), `transaction.test.ts` (AC-08) | ✅ |
 | AC-09 | Void tidak masuk laporan omzet/profit | ✅ Pass | `report.test.ts` (FR-39), `dashboard.test.ts` | ✅ |
 | AC-10 | Cicilan sebagian mengurangi sisa saldo | ✅ Pass | `debt.test.ts`, `debt.service.test.ts` | ✅ |
 | AC-11 | Pelunasan penuh ubah status LUNAS | ✅ Pass | `debt.test.ts`, `debt.service.test.ts` | ✅ |
@@ -171,8 +194,19 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 | AC-15 | File ekspor dapat dibuka & isi cocok | ✅ Pass | `report.test.ts` (Content-Type/Disposition xlsx & pdf) | ✅ |
 | AC-16 | Tren produk maksimal 5, urut descending | ✅ Pass | `report.test.ts` (FR-38) | ✅ |
 | AC-17 | Dashboard load < 3 detik | ✅ Pass | `dashboard.test.ts` + manual perf | ✅ |
+| AC-18 | Upload foto menolak tipe file tak didukung & isi bukan gambar valid | ✅ Pass | `media.test.ts` (415 `INVALID_FILE_TYPE`, 400 saat Sharp menolak berkas corrupt) | ✅ |
+| AC-19 | Penyesuaian stok manual menolak stok negatif / alasan kosong | ✅ Pass | `product.test.ts` (stock-adjustment), `product.service.test.ts` | ✅ |
+| AC-20 | Produk titipan wajib penitip; tipe & penitip immutable | ✅ Pass | `consignment.test.ts` (BR-A), `consignment.service.test.ts` (BR-A) | ✅ |
+| AC-21 | Harga jual produk titipan ≥ harga setor | ✅ Pass | `consignment.test.ts` (BR-B), `consignment.service.test.ts` (BR-B) | ✅ |
+| AC-22 | Penerimaan menambah stok; retur melebihi stok ditolak | ✅ Pass | `consignment.test.ts` (BR-C), `consignment.service.test.ts` (BR-C/BR-I) | ✅ |
+| AC-23 | Setoran validasi saldo (saldo 0 / melebihi / tepat) | ✅ Pass | `consignment.balance.test.ts` (BR-D, termasuk concurrency), `consignment.test.ts` | ✅ |
+| AC-24 | Penonaktifan penitip berstok ditolak; produk titipan ikut nonaktif | ✅ Pass | `consignment.test.ts` (BR-E, BR-H), `consignment.service.test.ts` (BR-E, BR-H) | ✅ |
+| AC-25 | Void setelah setoran → saldo negatif; setoran penitip nonaktif diizinkan | ✅ Pass | `consignment.balance.test.ts` (BR-F, BR-G), `consignment.test.ts` | ✅ |
+| AC-26 | Laporan konsinyasi konsisten dengan saldo; total kewajiban penitip | ✅ Pass | `consignment.balance.test.ts` (laporan & `totalKewajibanPenitip`), `consignment.test.ts` (dashboard/report) | ✅ |
 
-### **Summary AC:** ✅ 19/19 Pass (100%) — AC-01…AC-17 ditambah AC-05a & AC-05b (revisi FR-20)
+### **Summary AC:** ✅ 26/26 Pass (100%) — AC-01…AC-26 ditambah AC-05a & AC-05b (revisi FR-20)
+
+**Catatan label test.** AC-18/AC-19 dan AC-20–AC-26 sudah resmi ada di SRS v1.1, namun nama test yang ada masih memakai label lama (`Perluasan FR-07/FR-09`, `BR-A`…`BR-J`). Penyelarasan nama test ke ID AC bersifat label-saja, dapat dikerjakan kapan saja tanpa mengubah hasil test; pemetaan AC↔BR ada di SDD §8.5. Sampai saat itu, traceability tetap terjaga pada level BR/FR (lihat §2 dan `TRACEABILITY.md` §6A).
 
 ---
 
@@ -206,12 +240,26 @@ Backend REST API untuk Kendi's Market telah **selesai diimplementasikan** sesuai
 | GET | `/reports/sales` | ✅ | `report.routes.ts` | ✅ Match |
 | GET | `/reports/debts` | ✅ | `report.routes.ts` | ✅ Match |
 | GET | `/reports/product-trend` | ✅ | `report.routes.ts` | ✅ Match |
+| GET | `/consignors` | ✅ | `consignment.routes.ts` (`consignorsRouter`) | ✅ Match |
+| GET | `/consignors/:id` | ✅ | `consignment.routes.ts` | ✅ Match |
+| POST | `/consignors` | ✅ | `consignment.routes.ts` | ✅ Match |
+| PUT | `/consignors/:id` | ✅ | `consignment.routes.ts` | ✅ Match |
+| PATCH | `/consignors/:id/status` | ✅ | `consignment.routes.ts` | ✅ Match |
+| GET | `/consignors/:id/balance` | ✅ | `consignment.routes.ts` | ✅ Match |
+| GET | `/consignors/:id/payments` | ✅ | `consignment.routes.ts` | ✅ Match |
+| POST | `/consignors/:id/payments` | ✅ | `consignment.routes.ts` | ✅ Match |
+| POST | `/consignment/receipts` | ✅ | `consignment.routes.ts` (`consignmentRouter`) | ✅ Match |
+| POST | `/consignment/returns` | ✅ | `consignment.routes.ts` | ✅ Match |
+| GET | `/consignment/movements` | ✅ | `consignment.routes.ts` | ✅ Match |
+| GET | `/reports/consignment` | ✅ | `report.routes.ts` (handler di `consignment.controller.ts`) | ✅ Match |
 | GET | `/reports/sales/export` | ✅ | `report.routes.ts` | ✅ Match |
 | GET | `/reports/debts/export` | ✅ | `report.routes.ts` | ✅ Match |
 
-### **Summary Endpoint:** ✅ 28/28 Match (100%)
+### **Summary Endpoint:** ✅ 40/40 Match (100%)
 
 > Catatan: path `/debts/:id` yang sebelumnya tercatat di dokumen ini **tidak ada** — endpoint riwayat cicilan adalah `/debts/:transactionId/payments` (SDD §5.6, Lampiran C). Status produk nonaktif diubah lewat `PATCH /products/:id/status`, bukan `DELETE`.
+>
+> Catatan konsinyasi: modul `consignment` memakai **dua router** (`consignorsRouter` → `/consignors`, `consignmentRouter` → `/consignment`) yang didaftarkan di `app.ts`. Handler `GET /reports/consignment` dipasang pada `report.routes.ts` tetapi implementasinya di `consignment.controller.ts`/`consignment.service.ts`, agar seluruh rumus kewajiban penitip terpusat di satu modul (SDD §3.10, §5.10). Endpoint `/reports/consignment/export` **tidak** tersedia — lihat §6.9.
 
 ---
 
@@ -289,7 +337,7 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 - **Alasan:** menghilangkan kemungkinan status tidak konsisten (mis. LUNAS padahal uang kurang) dan mencerminkan alur kasir nyata.
 - **Dampak teknis:**
   - Kolom baru `Transaction.uangDiterima` dan `Transaction.kembalian` (nullable, `Decimal(12,2)`, dengan `CHECK >= 0`). Migration `20261017_add_uang_diterima_kembalian` melakukan backfill: transaksi LUNAS lama diisi `uangDiterima = total`, `kembalian = 0`.
-  - Uang muka transaksi Utang disimpan pada `Transaction.uangDiterima`/`sisaSaldoUtang`, **bukan** sebagai entri `PaymentHistory` pertama — sehingga transaksi Utang yang baru dibuat tetap dapat di-void pada hari yang sama (BR-13).
+  - Uang muka transaksi Utang disimpan pada `Transaction.uangDiterima`/`sisaSaldoUtang`, **bukan** sebagai entri `PaymentHistory` pertama — sehingga transaksi Utang yang baru dibuat tetap dapat di-void dalam window 24 jam (BR-13).
   - Field baru diserialisasi sebagai string desimal pada respons transaksi & utang.
 - **Status:** ✅ Selesai & teruji (`transaction.service.test.ts`, `transaction.test.ts`, `constraints.test.ts`).
 
@@ -308,10 +356,41 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 | D1 | `StockAdjustment` terdokumentasi | ✅ SDD §4.2 |
 | E | Lapisan repository per-modul tidak dibuat (Prisma langsung di service), modul `user/`/`stock/` tidak ada — alasan dicatat | ✅ SDD §2.2/§2.4/§3.5 |
 | F | Dashboard/report menyerialkan uang sebagai string; dashboard tanpa parameter periode | ✅ `sendSuccess` + `decimalToString`; SDD §5.7 |
-| G | Suite `media`/`dashboard`/`report` ditambahkan | ✅ 183 test / 14 suite |
+| G | Suite `media`/`dashboard`/`report` ditambahkan | ✅ 187 test / 14 suite (kondisi saat audit A1–H; kini 283/17 setelah konsinyasi — lihat §6.9) |
 | H | Body Postman diperbaiki (`hargaJual`/`hargaModal` string, `delta`/`alasan`, health) | ✅ koleksi v2.1 tervalidasi |
 
-### **Impact Assessment:** ✅ Semua deviasi lama sudah ditutup (diperbaiki atau didokumentasikan sebagai keputusan konservatif); tidak ada perubahan pada arsitektur inti maupun requirement SRS.
+### **Impact Assessment:** ✅ Semua deviasi lama sudah ditutup (diperbaiki atau didokumentasikan sebagai keputusan konservatif). Penambahan modul konsinyasi (§6.9) **bukan** deviasi: ia requirement baru yang sudah didokumentasikan lengkap di SDD v1.1 (§3.14, §4, §5.10, §11.11–§11.16) dan diberi nomor lanjutan FR-46–FR-49/BR-17–BR-26. Yang masih terbuka hanya penyelarasan dokumen acuan (SRS/PRD), bukan implementasi.
+
+### 6.8 Revisi: Void Window 24 Jam (2026-10-24)
+- **Perubahan requirement:** batas waktu void (BR-13) diubah dari "hari kalender yang sama" menjadi **rolling 24 jam** sejak `createdAt`.
+- **Alasan:** aturan hari kalender memberi jendela koreksi yang tidak adil (transaksi 23.59 hanya punya ±1 menit, transaksi 00.01 punya hampir 24 jam). Rolling 24 jam bersifat seragam dan mudah dikomunikasikan.
+- **Dampak teknis:**
+  - `transaction.service.ts`: konstanta `VOID_WINDOW_HOURS = 24`; validasi memakai `isWithinHoursWindow()` (bukan `isSameCalendarDay()`).
+  - `utils/date.ts`: helper baru `isWithinHoursWindow(target, reference, hours)` berbasis selisih epoch — inklusif pada batas 24 jam, menolak `reference` yang lebih awal dari `target`, dan tidak terpengaruh zona waktu.
+  - Pesan `VoidWindowExpiredError` menjadi "maksimal 24 jam setelah transaksi dibuat".
+  - Test: `transaction.service.test.ts` (batas helper 24 jam, 23 jam lolos, 25 jam ditolak) dan `transaction.test.ts` (422 + pesan memuat "24 jam").
+  - SDD §3.7, §3.13, §5.5, §11.3, §11.9, dan §11.10 (baru) diperbarui.
+- **Catatan:** SRS v1.1 (2026-10-24) sudah menyelaraskan FR-25/BR-13/AC-07/AC-08 ke batas **24 jam**, sehingga dokumen requirement dan implementasi kini identik.
+- **Status:** ✅ Selesai & teruji.
+
+### 6.9 Fitur Penitipan Barang / Konsinyasi (2026-10-24)
+- **Perubahan requirement:** modul konsinyasi dipindahkan dari *Future Development* ke **MVP**. Requirement baru dinomori lanjutan: **FR-46–FR-49**, **BR-17–BR-26** (dari label BR-A…BR-J pada spesifikasi fitur), dan **AC-20–AC-26**; ketiganya kini resmi tercantum di SRS v1.1 (§4.9, §5, §9.8) dan PRD Revisi 4. Pemetaan resmi ada di SDD §3.14; keputusan desain di §11.11–§11.16.
+- **Dampak skema (dua migration aditif):**
+  - `20261024_add_consignment_stage1`: enum `ProductType`, kolom `Product.tipe` (`DEFAULT 'MILIK_SENDIRI'`) + `Product.consignorId` (nullable), tabel `Consignor` & `ConsignmentMovement`, CHECK `Product_tipe_consignor_check`, index `Product(tipe)`, `Product(consignorId)`, `Consignor(status)`, `ConsignmentMovement(consignorId|productId|createdAt)`.
+  - `20261024_add_consignment_stage2`: tabel `ConsignorPayment` (append-only) + CHECK `ConsignorPayment_jumlahBayar_check`, index `ConsignorPayment(consignorId)`.
+  - Keduanya **tidak mengubah** baris lama: `DEFAULT 'MILIK_SENDIRI'` membuat seluruh produk historis otomatis menjadi produk milik sendiri tanpa backfill manual.
+- **Modul baru:** `src/modules/consignment/` (`consignment.routes.ts` dengan dua router, `consignment.controller.ts`, `consignment.service.ts`, `consignment.schema.ts`).
+- **Modul yang diperluas (tanpa breaking change):**
+  - `product.service.ts` — `tipe`/`consignorId` (BR-17, BR-18), penolakan perubahan `tipe`/`consignorId` saat `PUT` (422), BR-24 pada `PATCH status`, BR-26 pada `DELETE`, filter `tipe`/`consignorId` pada `GET`.
+  - `transaction.service.ts` — tidak berubah secara logika; void otomatis mengoreksi kewajiban karena saldo **diturunkan** (BR-22).
+  - `report.service.ts` — `perTipe` pada laporan penjualan; `GET /reports/consignment` (handler di `consignment.controller.ts`).
+  - `dashboard.service.ts` — `totalKewajibanPenitip` (jumlah saldo **positif** semua penitip, termasuk `NONAKTIF`).
+  - `utils/errors.ts` — 5 error class baru: `ProductNotConsignmentError`, `ConsignorInactiveError`, `ConsignorHasStockError`, `ProductHasStockError`, `ConsignorOverpaymentError` (semua turunan `BusinessRuleError`, 422).
+- **Keputusan desain kunci:** (1) barang titipan memakai tabel `Product` yang sama (`tipe = TITIPAN`); (2) kewajiban penitip **diturunkan**, bukan disimpan (`SUM(DetailTransaction) − SUM(ConsignorPayment)`); (3) `Product.hargaModal` = harga setor untuk produk titipan; (4) status penitip dan status produk dua level terpisah, saldo independen dari keduanya; (5) batch/FIFO ditolak — harga setor berbeda dicatat sebagai baris `Product` terpisah. Rincian di SDD §11.11–§11.15.
+- **Test baru:** `tests/unit/consignment.service.test.ts` (33), `tests/unit/consignment.balance.test.ts` (20), `tests/api/consignment.test.ts` (38), ditambah perluasan `tests/integration/constraints.test.ts` (+5 CHECK constraint konsinyasi). Total naik dari 14 suite/187 test menjadi **17 suite/283 test**.
+- **Tidak dikerjakan (sengaja):** `/reports/consignment/export` — `export.service.ts` terikat pada bentuk `SalesReportData`/`DebtsReportData` sehingga menambah laporan ketiga berarti menulis template baru, bukan reuse. Dicatat sebagai saran di SDD §5.8 & §11.16.
+- **Catatan penyelarasan:** SRS dan PRD **sudah diselaraskan** (SRS v1.1 dan PRD Revisi 4, 2026-10-24): FR-46–FR-49, BR-17–BR-26, entity `Consignor`/`ConsignmentMovement`/`ConsignorPayment`, AC-18–AC-19 (foto & penyesuaian stok manual), AC-20–AC-26 (konsinyasi), serta pemindahan konsinyasi ke ruang lingkup MVP di PRD. Penyelarasan dokumen ini dan `TRACEABILITY.md` mengikuti revisi tersebut.
+- **Status:** ✅ Selesai & teruji (`tsc --noEmit` dan `eslint` bersih; 283/283 test passed).
 
 ---
 
@@ -323,12 +402,12 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 - **Root cause:** Jest Supertest tidak mem-parse `Set-Cookie` header dengan benar dalam satu test case spesifik.
 - **Mitigation:** Manual test passed. Issue hanya di test environment.
 - **Priority:** Low (isolated, tidak memengaruhi functionality).
-- **Status terkini (2026-10-24):** full suite lulus **183/183 dalam 14 suite**; setiap suite API memakai `tests/helpers/testUser.ts` (`ensureTestUser`) sehingga tidak lagi bergantung pada seed/urutan eksekusi. Test refresh cookie tetap lolos baik saat suite dijalankan terisolasi maupun bersama.
+- **Status terkini (2026-10-24):** full suite lulus **283/283 dalam 17 suite**; setiap suite API memakai `tests/helpers/testUser.ts` (`ensureTestUser`) sehingga tidak lagi bergantung pada seed/urutan eksekusi. Test refresh cookie tetap lolos baik saat suite dijalankan terisolasi maupun bersama.
 
 ### 7.2 Potential Race Condition (Mitigated)
-- **Lokasi:** Pembayaran cicilan simultan (`debt.service.ts`).
-- **Mitigation:** ✅ Atomic transaction dengan Prisma `$transaction` + `SELECT … FOR UPDATE` (row-level lock) di dalam transaksi.
-- **Test:** `debt.service.test.ts` (unit) + `debt.test.ts` (26 test API, termasuk beberapa cicilan berurutan).
+- **Lokasi:** Pembayaran cicilan simultan (`debt.service.ts`) dan **setoran ke penitip simultan** (`consignment.service.ts`).
+- **Mitigation:** ✅ Atomic transaction dengan Prisma `$transaction` + `SELECT … FOR UPDATE` (row-level lock) di dalam transaksi. Pada setoran, baris `Consignor` dikunci sehingga dua setoran paralel tidak dapat melampaui saldo.
+- **Test:** `debt.service.test.ts` (unit) + `debt.test.ts` (26 test API, termasuk beberapa cicilan berurutan); `consignment.balance.test.ts` — test *CONCURRENCY* dengan `Promise.allSettled` (2 setoran @35.000 dari saldo 50.000 → tepat 1 sukses, 1 ditolak `ConsignorOverpaymentError`, saldo akhir `15000.00`, hanya 1 baris `ConsignorPayment`).
 - **Status:** ✅ Resolved.
 
 ### 7.3 N+1 Query Risk (Mitigated)
@@ -366,7 +445,8 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 ### 8.5 SQL Injection
 - ✅ Prisma menggunakan parameterized query secara default
 - ✅ Tidak ada raw query dengan string concatenation
-- ⚠️ **Review:** Satu penggunaan `$queryRaw` untuk row locking di `debt.service.ts` — menggunakan `Prisma.sql` tagged template (aman).
+- ✅ **Review:** seluruh penggunaan `$queryRaw` memakai tagged template (parameterized) atau `Prisma.sql` — `debt.service.ts` (row lock), `product.service.ts` (low-stock), dan `consignment.service.ts` (row lock `Product`/`Consignor` + agregasi kewajiban/saldo). Daftar `id` pada query agregasi di-join lewat `Prisma.join(ids)`, bukan interpolasi string.
+- ✅ Nilai uang hasil agregasi dikonversi ke `Prisma.Decimal` di service; tidak ada aritmetika float JS pada jalur kewajiban penitip.
 
 ### 8.6 Credential & Secret Management
 - ✅ Tidak ada secret/credential di-log (Pino `redact` configured)
@@ -391,23 +471,28 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 | Multi-role Owner/Kasir | ⏸️ Out of MVP Scope | `middlewares/auth.middleware.ts` menyediakan `requireRole()` sebagai hook kosong (selalu lolos) untuk fase berikutnya |
 | Offline-first mode | ⏸️ Out of MVP Scope | Evaluasi di fase berikutnya (NFR-03) |
 | Multi-gambar per produk (galeri) | ⏸️ Out of MVP Scope | Struktur database (`fotoKey`, `fotoUrl`) dapat diperluas ke tabel `ProductPhoto` di kemudian hari |
-| Konsinyasi (produk titipan) | ⏸️ Out of MVP Scope | Future Development (PRD) |
 | Pemantauan kedaluwarsa | ⏸️ Out of MVP Scope | Future Development (PRD) |
+| Penanganan barang titipan rusak/hilang/kedaluwarsa | ⏸️ Out of MVP Scope | Future Development — tercatat di SDD §1.5 |
+| Pembatalan/koreksi setoran ke penitip yang salah input | ⏸️ Out of MVP Scope | `ConsignorPayment` append-only; koreksi dilakukan di fase berikutnya (SDD §3.14) |
+| Batch/FIFO produk titipan | ⏸️ Out of MVP Scope | Harga setor berbeda dicatat sebagai baris `Product` terpisah (SDD §11.15) |
 | Integrasi pembayaran digital (QRIS) | ⏸️ Out of MVP Scope | Future Development (PRD) |
 | Unit test `media.service` dengan mock `S3Client` | ⚠️ Belum ada | SDD §8.2 menyebut `aws-sdk-client-mock`, tetapi paket tersebut belum terpasang. Saat ini `media.test.ts` menguji seluruh jalur validasi sebelum menyentuh R2; skenario upload sukses perlu kredensial R2 atau mock S3. Rekomendasi: tambahkan `aws-sdk-client-mock` sebagai devDependency lalu uji `uploadProductPhoto`/`deleteProductPhoto` dengan Sharp + key generation tanpa jaringan |
-| AC resmi untuk upload foto | ⚠️ Perlu revisi SRS | Test diberi label "Perluasan FR-07/FR-09"; direkomendasikan menambahkan `AC-18` (upload foto) dan `AC-19` (penyesuaian stok manual) pada revisi SRS berikutnya |
+| AC resmi untuk upload foto | ✅ Selesai | `AC-18` sudah tercantum pada SRS v1.1 §9.7; test `media.test.ts` masih berlabel "Perluasan FR-07/FR-09" dan dapat diselaraskan ke ID AC kapan saja (label-saja) |
+| AC resmi untuk penyesuaian stok manual | ✅ Selesai | `AC-19` sudah tercantum pada SRS v1.1 §9.7; test `product.test.ts` (stock-adjustment) mencakup perilakunya |
+| AC resmi untuk konsinyasi | ✅ Selesai | `AC-20`–`AC-26` sudah tercantum pada SRS v1.1 §9.8; pemetaan AC↔BR ada di SDD §8.5. Test memakai label BR langsung (BR-A…BR-J / BR-17–BR-26) dan dapat diselaraskan kapan saja (label-saja) |
+| Ekspor laporan konsinyasi (`/reports/consignment/export`) | ⚠️ Saran, bukan komitmen | `export.service.ts` terikat pada `SalesReportData`/`DebtsReportData`; menambah laporan ketiga butuh template baru. SDD §5.8 & §11.16 |
 
-**Status:** ✅ Semua out-of-scope items sesuai dengan scope MVP yang disepakati di SRS §1.3.
+**Status:** ✅ Semua out-of-scope items sesuai dengan scope MVP yang disepakati di SDD §1.5. Modul konsinyasi **sudah tidak** lagi out-of-scope sejak revisi 2026-10-24.
 
 ---
 
 ## 10. Test Coverage Report
 
-**Total Test Suites:** 14  
-**Total Tests:** 183  
-**Passed:** 183 (100%)  
+**Total Test Suites:** 17  
+**Total Tests:** 283  
+**Passed:** 283 (100%)  
 **Failed:** 0  
-**Durasi:** ~15 detik (`maxWorkers: 1`, database test nyata)
+**Durasi:** ~73 detik (`maxWorkers: 1`, database test nyata)
 
 **Coverage by Layer (estimasi, bukan hasil `--coverage`):**
 - **Service Layer:** 85% (✅ Target >= 80% tercapai)
@@ -418,9 +503,9 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 > Angka coverage di atas adalah estimasi dari cakupan skenario (bukan output `jest --coverage`); jalankan perintah di bawah untuk angka aktual.
 
 **Test Distribution (terukur):**
-- Unit Tests: **70** (5 suite: `transaction.service`, `debt.service`, `product.service`, `errorHandler`, `env`)
-- API Tests: **109** (8 suite: `auth`, `product`, `transaction`, `debt`, `media`, `dashboard`, `report`, `app`)
-- Integration Tests: **4** (1 suite: `constraints`)
+- Unit Tests: **126** (7 suite: `transaction.service` 24, `debt.service` 16, `product.service` 9, `errorHandler` 22, `env` 2, `consignment.service` 33, `consignment.balance` 20)
+- API Tests: **148** (9 suite: `auth` 10, `product` 17, `transaction` 24, `debt` 26, `media` 8, `dashboard` 6, `report` 13, `app` 6, `consignment` 38)
+- Integration Tests: **9** (1 suite: `constraints` — 4 constraint lama + 5 constraint konsinyasi)
 
 **Suite yang menutup AC/FR utama:**
 | Suite | Fokus |
@@ -429,14 +514,17 @@ Semua item di bawah ini sudah **diselaraskan**: setiap temuan audit yang sebelum
 | `tests/unit/transaction.service.test.ts` | BR-05/07/08/10/13, concurrency |
 | `tests/unit/debt.service.test.ts` | BR-14, overpayment |
 | `tests/unit/product.service.test.ts` | BR-03/04/12 |
+| `tests/unit/consignment.service.test.ts` | BR-17/18/19/21/23/24/25/26 (BR-A/B/C/E/G/H/I/J), snapshot produk titipan |
+| `tests/unit/consignment.balance.test.ts` | BR-20/22 (saldo, penolakan & concurrency setoran, void setelah setoran), filter `punyaSaldo`, konsistensi laporan ↔ saldo, `totalKewajibanPenitip` |
 | `tests/api/auth.test.ts` | login, refresh, logout (wajib token), brute-force 429, health publik |
 | `tests/api/product.test.ts` | CRUD, threshold, stock-adjustment, `PRODUCT_HAS_TRANSACTION` |
 | `tests/api/transaction.test.ts` | AC-04–AC-08, uang diterima |
 | `tests/api/debt.test.ts` | AC-10–AC-12, riwayat cicilan |
 | `tests/api/media.test.ts` | Otorisasi + validasi upload (415/400/404) |
-| `tests/api/dashboard.test.ts` | AC-17, uang sebagai string |
-| `tests/api/report.test.ts` | AC-13–AC-16, ekspor xlsx/pdf |
-| `tests/integration/constraints.test.ts` | CHECK constraint DB |
+| `tests/api/dashboard.test.ts` | AC-17, uang sebagai string, `totalKewajibanPenitip` |
+| `tests/api/report.test.ts` | AC-13–AC-16, ekspor xlsx/pdf, `perTipe` |
+| `tests/api/consignment.test.ts` | FR-46–FR-49/BR-17–BR-26 end-to-end (38 skenario) |
+| `tests/integration/constraints.test.ts` | CHECK constraint DB (termasuk `Product_tipe_consignor_check`, `ConsignmentMovement_jumlah_check`, `ConsignmentMovement_stokSesudah_check`, `ConsignorPayment_jumlahBayar_check`) |
 
 **Performance Tests (Manual):**
 - AC-13 (Laporan < 5 detik): ✅ Pass (~2.5s avg)
@@ -458,7 +546,7 @@ npm run test -- --coverage
 | README deployment guide | ✅ | `backend/README_NEW.md` (§Build & Production Deployment) |
 | Nginx reverse proxy config | ✅ | `backend/README_NEW.md` §Konfigurasi Nginx |
 | Environment variables documented | ✅ | `backend/.env.example` + `backend/README_NEW.md` §Environment Variables Reference |
-| Database migration strategy | ✅ | `npm run migrate:deploy` (4 migration: init, check constraints, stock adjustment, uang diterima) |
+| Database migration strategy | ✅ | `npm run migrate:deploy` — 6 migration: `init`, `check_constraints`, `stock_adjustment`, `uang_diterima_kembalian`, `add_consignment_stage1`, `add_consignment_stage2` (dua terakhir aditif, aman untuk data lama) |
 | Backup script & cron job | ✅ | `backend/README_NEW.md` §Database Backup (skrip `pg_dump` + entri crontab; salinan skrip perlu dibuat di server saat deploy) |
 | Cleanup orphan photos script | ✅ | `scripts/cleanup-orphan-photos.ts` |
 | Smoke test production | ✅ | `GET /api/v1/health` + `README_NEW.md` §Verifikasi |
@@ -474,21 +562,24 @@ npm run test -- --coverage
 ### ✅ **APPROVED FOR PRODUCTION DEPLOYMENT**
 
 **Justifikasi:**
-1. **100% FR/BR/AC Complete:** Seluruh functional requirements, business rules, dan acceptance criteria telah diimplementasikan dan diverifikasi.
-2. **100% Test Pass Rate:** 183/183 tests passing dalam 14 suite. Seluruh test suite (unit, API, integration) passed tanpa kegagalan; `tsc --noEmit` dan `npm run lint` bersih (0 error, 0 warning).
+1. **100% FR/BR/AC Complete:** Seluruh functional requirements (FR-01–FR-49), business rules (BR-01–BR-26), dan acceptance criteria (AC-01–AC-26 + AC-05a/AC-05b) telah diimplementasikan dan diverifikasi.
+2. **100% Test Pass Rate:** 283/283 tests passing dalam 17 suite. Seluruh test suite (unit, API, integration) passed tanpa kegagalan; `tsc --noEmit` dan `npm run lint` bersih (0 error, 0 warning).
 3. **85% Service Layer Coverage:** Melampaui target >= 80%.
-4. **Security Compliant:** Seluruh praktik keamanan SDD telah diimplementasikan.
+4. **Security Compliant:** Seluruh praktik keamanan SDD telah diimplementasikan; semua `$queryRaw` memakai tagged template / `Prisma.sql` (parameterized).
 5. **Performance Target Met:** AC-13 (laporan < 5s) dan AC-17 (dashboard < 3s) passed.
 6. **Deployment Documentation Complete:** `README_NEW.md`, `ecosystem.config.js`, konfigurasi Nginx, prosedur backup & cleanup, semuanya tersedia dan terdokumentasi.
+7. **Integritas kewajiban penitip:** saldo **diturunkan** (bukan disimpan) sehingga void otomatis mengoreksi kewajiban; concurrency setoran diuji dengan row lock (SDD §11.12, §6.9).
 
 **Next Steps:**
 1. Setup production environment (PostgreSQL, Cloudflare R2 bucket)
 2. Configure environment variables di production server (salin dari `.env.example`)
 3. Deploy mengikuti 7 langkah di `backend/README_NEW.md`
-4. Setup cron jobs untuk backup & cleanup
-5. Configure SSL/TLS dengan Let's Encrypt
-6. Monitoring & logging setup (PM2 logs, database monitoring)
-7. (Opsional) Tambahkan `aws-sdk-client-mock` + unit test `media.service` untuk menutup Open Question §9
+4. Jalankan `npm run migrate:deploy` (6 migration, termasuk 2 migration konsinyasi)
+5. Setup cron jobs untuk backup & cleanup
+6. Configure SSL/TLS dengan Let's Encrypt
+7. Monitoring & logging setup (PM2 logs, database monitoring)
+8. (Opsional) Tambahkan `aws-sdk-client-mock` + unit test `media.service` untuk menutup Open Question §9
+9. (Opsional) Selaraskan nama test konsinyasi & upload foto ke ID AC resmi (`AC-18`–`AC-26`) — perubahan label saja, tanpa mengubah perilaku (§6.9)
 
 ---
 

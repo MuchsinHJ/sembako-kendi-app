@@ -26,6 +26,25 @@ enum TransactionStatus {
   DIBATALKAN
 }
 
+// Sumber barang: milik toko sendiri atau titipan penitip (konsinyasi).
+// BR-A: TITIPAN wajib punya consignorId; MILIK_SENDIRI wajib null.
+enum ProductType {
+  MILIK_SENDIRI
+  TITIPAN
+}
+
+enum ConsignorStatus {
+  AKTIF
+  NONAKTIF
+}
+
+// Arah pergerakan stok titipan. `jumlah` selalu positif (CHECK constraint),
+// arah ditentukan oleh `tipe`.
+enum ConsignmentMovementType {
+  TERIMA
+  RETUR
+}
+
 // ─────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────
@@ -43,6 +62,8 @@ model User {
   refreshTokens RefreshToken[]
   sessions      Session[]
   stockAdjustments StockAdjustment[]
+  consignmentMovements ConsignmentMovement[]
+  consignorPayments ConsignorPayment[]
 }
 
 model RefreshToken {
@@ -68,11 +89,16 @@ model Product {
   id          String        @id @default(uuid())
   nama        String
   kategori    String
+  // Untuk produk TITIPAN, hargaModal = harga setor per unit ke penitip (BR-B).
   hargaJual   Decimal       @db.Decimal(12, 2)
   hargaModal  Decimal       @db.Decimal(12, 2)
   stok        Int           @default(0)
   stokMinimum Int           @default(0)
   status      ProductStatus @default(AKTIF)
+  // BR-A: tipe & consignorId immutable setelah produk dibuat.
+  tipe        ProductType   @default(MILIK_SENDIRI)
+  consignorId String?
+  consignor   Consignor?    @relation(fields: [consignorId], references: [id])
   fotoKey     String? // object key di Cloudflare R2, mis. "products/{id}/{uuid}.webp"
   fotoUrl     String? // URL publik hasil upload, dikirim ke frontend
   createdAt   DateTime      @default(now())
@@ -80,9 +106,75 @@ model Product {
 
   detailTransaksi DetailTransaction[]
   stockAdjustments StockAdjustment[]
+  consignmentMovements ConsignmentMovement[]
 
   @@index([status])
   @@index([kategori])
+  @@index([tipe])
+  @@index([consignorId])
+}
+
+// ─────────────────────────────────────────
+// KONSINYASI (barang titipan)
+// ─────────────────────────────────────────
+
+model Consignor {
+  id        String          @id @default(uuid())
+  nama      String
+  noHp      String?
+  catatan   String?
+  status    ConsignorStatus @default(AKTIF)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  products  Product[]
+  movements ConsignmentMovement[]
+  payments  ConsignorPayment[]
+
+  @@index([status])
+}
+
+// Append-only. Menambah/mengurangi stok titipan beserta jejak stok sebelum/sesudah.
+model ConsignmentMovement {
+  id            String                  @id @default(uuid())
+  consignorId   String
+  consignor     Consignor               @relation(fields: [consignorId], references: [id])
+  productId     String
+  product       Product                 @relation(fields: [productId], references: [id])
+  tipe          ConsignmentMovementType
+  jumlah        Int // selalu positif; arah ditentukan oleh `tipe`
+  stokSebelum   Int
+  stokSesudah   Int
+  catatan       String?
+  dicatatOlehId String
+  dicatatOleh   User                    @relation(fields: [dicatatOlehId], references: [id])
+  createdAt     DateTime                @default(now())
+
+  @@index([consignorId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+/**
+ * Setoran ke penitip (Tahap 2). Append-only: tidak ada endpoint edit/hapus.
+ *
+ * BR-D: `jumlahBayar > 0` (CHECK di database) dan tidak boleh melebihi saldo
+ * kewajiban saat dicatat. `saldoSetelahBayar` adalah snapshot audit; boleh
+ * negatif bila transaksi terkait di-void setelah setoran (BR-F).
+ */
+model ConsignorPayment {
+  id                String    @id @default(uuid())
+  consignorId       String
+  consignor         Consignor @relation(fields: [consignorId], references: [id])
+  tanggalBayar      DateTime  @default(now())
+  jumlahBayar       Decimal   @db.Decimal(12, 2)
+  saldoSetelahBayar Decimal   @db.Decimal(12, 2)
+  catatan           String?
+  dicatatOlehId     String
+  dicatatOleh       User      @relation(fields: [dicatatOlehId], references: [id])
+  createdAt         DateTime  @default(now())
+
+  @@index([consignorId])
 }
 
 model Transaction {

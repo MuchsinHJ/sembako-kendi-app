@@ -9,11 +9,13 @@ import type { Request, Response, NextFunction } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendSuccess } from "../../utils/response.js";
 import type { ReportQuery, ExportQuery } from "./report.schema.js";
+import type { ConsignmentReportQuery } from "../consignment/consignment.schema.js";
 import {
   getSalesReport,
   getDebtsReport,
   getProductTrend as getProductTrendService,
 } from "./report.service.js";
+import { getConsignmentReport as getConsignmentReportService } from "../consignment/consignment.service.js";
 import {
   exportSalesToExcel,
   exportSalesToPDF,
@@ -61,6 +63,23 @@ export const getProductTrend = asyncHandler(
     const data = await getProductTrendService(query);
 
     sendSuccess(res, 200, data, "Tren produk berhasil dimuat");
+  },
+);
+
+/**
+ * GET /reports/consignment
+ * Laporan konsinyasi per penitip dalam periode.
+ *
+ * Catatan: service-nya berada di modul `consignment` karena seluruh logika
+ * kewajiban penitip terpusat di sana; route tetap di bawah `/reports` sesuai
+ * kontrak fitur.
+ */
+export const getConsignment = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const query = req.query as unknown as ConsignmentReportQuery;
+    const data = await getConsignmentReportService(query);
+
+    sendSuccess(res, 200, data, "Laporan konsinyasi berhasil dimuat");
   },
 );
 

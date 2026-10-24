@@ -4,7 +4,7 @@
  * BR-05: Stok tidak boleh negatif saat transaksi
  * BR-07: Total dihitung dengan Decimal untuk precision
  * BR-08: Transaksi dengan uang diterima < total (UTANG) wajib nama pembeli
- * BR-13: Void hanya dalam window waktu yang ditentukan (default: hari yang sama)
+ * BR-13: Void hanya dalam window waktu yang ditentukan (24 jam sejak createdAt)
  *
  * Status pembayaran diturunkan dari `uangDiterima` (bukan dipilih langsung):
  *   uangDiterima >= total -> LUNAS, kembalian = uangDiterima - total
@@ -22,7 +22,7 @@ import {
   StockExceededError,
   VoidWindowExpiredError,
 } from '../../utils/errors.js';
-import { isSameCalendarDay } from '../../utils/date.js';
+import { isWithinHoursWindow } from '../../utils/date.js';
 import type {
   CreateTransactionInput,
   ListTransactionsQuery,
@@ -31,13 +31,13 @@ import type {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /**
- * Void window configuration (BR-13).
- * Default: transaksi hanya bisa di-void dalam hari kalender yang sama dengan createdAt,
- * dihitung dengan zona Asia/Jakarta sesuai contoh SRS (lihat utils/date.ts).
- *
- * Open Question: Apakah perlu konfigurasi yang lebih fleksibel (misal: 24 jam dari createdAt)?
- * Untuk sementara ikuti interpretasi konservatif: hari kalender yang sama.
+ * Void window configuration (BR-13, revisi 2026-10-24).
+ * Transaksi hanya bisa di-void dalam **24 jam** sejak `createdAt` (rolling
+ * window), dihitung dari waktu server — bukan batas hari kalender — sehingga
+ * transaksi pukul 23.00 masih dapat dibatalkan sampai pukul 23.00 hari
+ * berikutnya.
  */
+export const VOID_WINDOW_HOURS = 24;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -408,13 +408,17 @@ export const voidTransaction = async (
     throw new BusinessRuleError('Transaksi sudah dibatalkan sebelumnya');
   }
 
-  // BR-13: Validasi void window (hari kalender yang sama, zona Asia/Jakarta)
+  // BR-13: Validasi void window (rolling 24 jam sejak createdAt, waktu server)
   const now = new Date();
-  const isWithinVoidWindow = isSameCalendarDay(transaction.createdAt, now);
+  const isWithinVoidWindow = isWithinHoursWindow(
+    transaction.createdAt,
+    now,
+    VOID_WINDOW_HOURS,
+  );
 
   if (!isWithinVoidWindow) {
     throw new VoidWindowExpiredError(
-      'Batas waktu pembatalan transaksi telah terlewati (hanya dapat dibatalkan dalam hari yang sama)',
+      `Batas waktu pembatalan transaksi telah terlewati (maksimal ${VOID_WINDOW_HOURS} jam setelah transaksi dibuat)`,
     );
   }
 

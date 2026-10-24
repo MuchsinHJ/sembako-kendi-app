@@ -9,10 +9,12 @@ import { Router } from "express";
 import { authenticate } from "../../middlewares/auth.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { reportQuerySchema, exportQuerySchema } from "./report.schema.js";
+import { consignmentReportQuerySchema } from "../consignment/consignment.schema.js";
 import {
   getSales,
   getDebts,
   getProductTrend,
+  getConsignment,
   exportSales,
   exportDebts,
 } from "./report.controller.js";
@@ -53,6 +55,18 @@ router.get(
   authenticate,
   validate({ query: reportQuerySchema }),
   getProductTrend,
+);
+
+/**
+ * GET /reports/consignment
+ * Laporan konsinyasi per penitip (modal, setoran, saldo).
+ * Referensi: Fitur Penitipan Barang Tahap 2.
+ */
+router.get(
+  "/consignment",
+  authenticate,
+  validate({ query: consignmentReportQuerySchema }),
+  getConsignment,
 );
 
 /**

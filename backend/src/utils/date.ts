@@ -1,8 +1,10 @@
 /**
  * utils/date.ts
  * Helpers tanggal & waktu menggunakan date-fns + date-fns-tz (SDD §3.13).
- * Semua operasi yang melibatkan "hari kalender" (mis. void window BR-13)
- * wajib memakai fungsi ini agar konsisten di zona Asia/Jakarta.
+ * Semua operasi yang melibatkan "hari kalender" (mis. batas "hari ini"/"bulan
+ * berjalan" dashboard, rentang laporan) wajib memakai fungsi ini agar konsisten
+ * di zona Asia/Jakarta. Void window (BR-13) bersifat rolling 24 jam sehingga
+ * memakai `isWithinHoursWindow` (selisih epoch, bebas zona waktu).
  */
 
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
@@ -58,16 +60,20 @@ export const getEndOfMonthJakarta = (date: Date = getNow()): Date => {
 };
 
 /**
- * Cek apakah `target` masih dalam hari kalender yang sama dengan `reference`
- * (keduanya dievaluasi dalam zona Jakarta).
- * Digunakan untuk memeriksa void window (BR-13).
+ * Cek apakah `reference` masih berada dalam rentang `hours` jam **setelah**
+ * `target`. Diperkenalkan untuk void window BR-13 (revisi: 24 jam sejak
+ * transaksi dibuat), yang bersifat rolling window — bukan batas hari kalender.
+ *
+ * Perhitungan memakai selisih epoch (UTC), sehingga tidak terpengaruh zona
+ * waktu maupun pergantian hari kalender.
+ *
+ * @returns `false` bila `reference` lebih awal dari `target` (selisih negatif).
  */
-export const isSameCalendarDay = (target: Date, reference: Date): boolean => {
-  const tZ = toZonedTime(target, TIMEZONE);
-  const rZ = toZonedTime(reference, TIMEZONE);
-  return (
-    tZ.getFullYear() === rZ.getFullYear() &&
-    tZ.getMonth()    === rZ.getMonth()    &&
-    tZ.getDate()     === rZ.getDate()
-  );
+export const isWithinHoursWindow = (
+  target: Date,
+  reference: Date,
+  hours: number,
+): boolean => {
+  const diffMs = reference.getTime() - target.getTime();
+  return diffMs >= 0 && diffMs <= hours * 60 * 60 * 1000;
 };

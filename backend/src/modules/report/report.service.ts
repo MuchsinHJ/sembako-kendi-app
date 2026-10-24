@@ -13,6 +13,11 @@ import { prisma } from "../../config/db.js";
 import { decimalToString } from "../../utils/money.js";
 import type { ReportQuery } from "./report.schema.js";
 
+interface SalesTypeBreakdown {
+  omzet: string;
+  profit: string;
+}
+
 interface SalesReportData {
   periode: {
     start: string;
@@ -21,6 +26,15 @@ interface SalesReportData {
   omzet: string;
   profit: string;
   transactionCount: number;
+  /**
+   * Breakdown omzet & profit menurut sumber barang (produk milik sendiri vs
+   * titipan). Field lama tidak berubah; breakdown ini hanya tambahan
+   * (backward compatible). Dihitung dari snapshot DetailTransaction.
+   */
+  perTipe: {
+    MILIK_SENDIRI: SalesTypeBreakdown;
+    TITIPAN: SalesTypeBreakdown;
+  };
   transactions: Array<{
     id: string;
     tanggal: Date;
@@ -127,7 +141,11 @@ export async function getSalesReport(
     select: {
       hargaJualSnapshot: true,
       hargaModalSnapshot: true,
+      subtotal: true,
       jumlah: true,
+      product: {
+        select: { tipe: true },
+      },
     },
   });
 
@@ -138,6 +156,27 @@ export async function getSalesReport(
     return sum.add(itemProfit);
   }, new Prisma.Decimal(0));
 
+  // Breakdown per tipe produk (konsinyasi Tahap 1).
+  // Memakai snapshot agar nilai historis tidak berubah saat harga diedit.
+  const perTipeAccumulator = {
+    MILIK_SENDIRI: {
+      omzet: new Prisma.Decimal(0),
+      profit: new Prisma.Decimal(0),
+    },
+    TITIPAN: {
+      omzet: new Prisma.Decimal(0),
+      profit: new Prisma.Decimal(0),
+    },
+  };
+
+  for (const item of details) {
+    const bucket = perTipeAccumulator[item.product.tipe];
+    bucket.omzet = bucket.omzet.add(item.subtotal);
+    bucket.profit = bucket.profit.add(
+      item.hargaJualSnapshot.sub(item.hargaModalSnapshot).mul(item.jumlah),
+    );
+  }
+
   return {
     periode: {
       start: query.startDate,
@@ -146,6 +185,16 @@ export async function getSalesReport(
     omzet: decimalToString(omzetDecimal) ?? "0.00",
     profit: decimalToString(profitDecimal) ?? "0.00",
     transactionCount: transactions.length,
+    perTipe: {
+      MILIK_SENDIRI: {
+        omzet: decimalToString(perTipeAccumulator.MILIK_SENDIRI.omzet) ?? "0.00",
+        profit: decimalToString(perTipeAccumulator.MILIK_SENDIRI.profit) ?? "0.00",
+      },
+      TITIPAN: {
+        omzet: decimalToString(perTipeAccumulator.TITIPAN.omzet) ?? "0.00",
+        profit: decimalToString(perTipeAccumulator.TITIPAN.profit) ?? "0.00",
+      },
+    },
     transactions,
   };
 }

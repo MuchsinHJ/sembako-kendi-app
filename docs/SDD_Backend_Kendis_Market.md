@@ -1,10 +1,12 @@
 # Software Design Document (SDD) — Backend
 ## Kendi's Market
 
-**Versi:** 1.0
-**Diturunkan dari:** SRS Kendi's Market v1.0, PRD Kendi's Market — Revisi 2
+**Versi:** 1.1 (revisi 2026-10-24 — penambahan Fitur Penitipan Barang/Konsinyasi)
+**Diturunkan dari:** SRS Kendi's Market v1.1, PRD Kendi's Market — Revisi 4
 **Komponen:** Backend Service (REST API)
 **Tech Stack:** Node.js, Express, TypeScript, Zod, Prisma, PostgreSQL, JWT/Session, bcrypt, Sharp, Multer, AWS SDK for S3 (Cloudflare R2), Pino, CORS, express-rate-limit, dotenv
+
+> **Catatan revisi 1.1.** Dokumen ini menambahkan modul **Konsinyasi (Penitipan Barang)** ke MVP beserta business rule baru **BR-17–BR-26** (diturunkan dari label BR-A…BR-J pada spesifikasi fitur) dan functional requirement baru **FR-46–FR-49**. Nomor FR/BR baru dipakai *lanjut* setelah nomor terakhir di SRS agar tidak bentrok. **SRS v1.1 dan PRD Revisi 4 sudah diselaraskan** dengan dokumen ini (FR-46–FR-49, BR-17–BR-26, AC-18–AC-26, entity konsinyasi, dan pemindahan konsinyasi ke MVP); lihat Bagian 11.16.
 
 ---
 
@@ -14,15 +16,16 @@
 Dokumen ini menjabarkan **desain teknis backend** sistem Kendi's Market: arsitektur, struktur modul, desain database, kontrak API, desain keamanan, error handling, strategi pengujian, dan rencana deployment. SDD ini menjadi acuan implementasi bagi developer backend agar seluruh functional requirement (FR) dan business rule (BR) pada SRS terealisasi secara konsisten pada level kode dan database.
 
 ### 1.2 Ruang Lingkup
-Dokumen ini mencakup **sisi backend (server-side)** saja: REST API, business logic, akses database, autentikasi, keamanan, serta penyimpanan dan optimasi file gambar produk. Desain frontend/UI tidak dibahas di sini (lihat SRS bagian 8 — Interface Requirements). Ruang lingkup teknis meliputi seluruh modul MVP: Auth, User, Produk & Stok, Media/Upload Gambar, Transaksi, Void, Pelunasan Cicilan, Dashboard, Laporan, dan Ekspor.
+Dokumen ini mencakup **sisi backend (server-side)** saja: REST API, business logic, akses database, autentikasi, keamanan, serta penyimpanan dan optimasi file gambar produk. Desain frontend/UI tidak dibahas di sini (lihat SRS bagian 8 — Interface Requirements). Ruang lingkup teknis meliputi seluruh modul MVP: Auth, User, Produk & Stok, Media/Upload Gambar, Transaksi, Void, Pelunasan Cicilan, Konsinyasi (Penitipan Barang), Dashboard, Laporan, dan Ekspor.
 
 ### 1.3 Acuan Dokumen
 | Dokumen | Keterangan |
 |---|---|
-| PRD Kendi's Market — Revisi 2 | Kebutuhan bisnis, business rules (BR-01–BR-16), metrik sukses |
-| SRS Kendi's Market v1.0 | Functional requirements (FR-01–FR-45), NFR, data requirements (termasuk field `foto_url` pada entity Produk, Bagian 7.2), acceptance criteria |
+| PRD Kendi's Market — Revisi 4 | Kebutuhan bisnis, business rules (BR-01–BR-26), user stories (US-01–US-17), metrik sukses |
+| SRS Kendi's Market v1.1 | Functional requirements (FR-01–FR-49), NFR, data requirements (termasuk field `foto_url` pada entity Produk, Bagian 7.2, serta entity konsinyasi pada Bagian 7.6–7.8), acceptance criteria (AC-01–AC-26) |
+| Spesifikasi Fitur Penitipan Barang (Konsinyasi) | Business rule BR-A…BR-J (dinomori ulang **BR-17–BR-26** di dokumen ini), keputusan desain fitur, dan kontrak endpoint |
 
-Setiap desain pada dokumen ini mereferensikan ID FR/BR/AC yang relevan dari SRS agar traceable (lihat Bagian 10).
+Setiap desain pada dokumen ini mereferensikan ID FR/BR/AC yang relevan dari SRS agar traceable (lihat Bagian 10). Sejak revisi SRS v1.1, ID **BR-17–BR-26**, **FR-46–FR-49**, dan **AC-20–AC-26** sudah menjadi bagian resmi SRS sehingga traceability dapat merujuk ID AC langsung; riwayat keputusan ada pada Bagian 11.16.
 
 ### 1.4 Definisi & Singkatan
 | Istilah | Definisi |
@@ -40,6 +43,12 @@ Setiap desain pada dokumen ini mereferensikan ID FR/BR/AC yang relevan dari SRS 
 | Multer | Middleware Express untuk menerima file upload (`multipart/form-data`) |
 | Sharp | Library pemrosesan gambar (resize, kompresi, konversi format) berbasis `libvips` |
 | PM2 | Process manager Node.js untuk menjalankan, memonitor, dan me-restart aplikasi di server production |
+| Konsinyasi / penitipan barang | Model bisnis di mana toko menjual barang milik pihak lain dan membayar pemiliknya setelah barang terjual |
+| Consignor / penitip | Pihak ketiga yang menitipkan barang ke toko (`Consignor`) |
+| Produk titipan | Baris `Product` dengan `tipe = TITIPAN`; `hargaModal` berarti harga setor per unit |
+| Harga setor | Nilai yang harus dibayar toko ke penitip untuk setiap unit barang titipan yang terjual |
+| Kewajiban penitip / saldo | Uang yang masih harus disetor toko ke penitip. **Diturunkan** (tidak disimpan) dari penjualan barang titipan dikurangi setoran yang sudah dicatat |
+| Setoran | Pembayaran dari toko ke penitip (`ConsignorPayment`), append-only |
 
 ### 1.5 Scope MVP & Out of Scope
 **Termasuk (MVP):**
@@ -48,13 +57,16 @@ Setiap desain pada dokumen ini mereferensikan ID FR/BR/AC yang relevan dari SRS 
 - Upload & optimasi foto produk (Multer + Sharp + Cloudflare R2)
 - Transaksi (Lunas/Utang), Void transaksi
 - Pelunasan utang bertahap (cicilan)
+- **Modul konsinyasi (produk titipan pihak ketiga):** data penitip, penerimaan & retur titipan, kewajiban/saldo per penitip, pencatatan setoran ke penitip, laporan konsinyasi
 - Dashboard ringkasan
-- Laporan penjualan, laporan utang, tren produk
-- Ekspor laporan ke Excel/PDF
+- Laporan penjualan, laporan utang, tren produk, laporan konsinyasi
+- Ekspor laporan ke Excel/PDF (belum termasuk ekspor laporan konsinyasi — lihat catatan pada 5.8)
 
 **Di luar scope (mengikuti PRD Future Development):**
 - Multi-role/hak akses (Owner/Kasir)
-- Modul konsinyasi (produk titipan pihak ketiga)
+- Penanganan barang titipan rusak/hilang/kedaluwarsa (siapa yang menanggung kerugian dan dampaknya ke kewajiban penitip)
+- Pembatalan/koreksi setoran ke penitip yang salah input
+- Batch/FIFO untuk produk titipan dengan harga setor berbeda dalam satu produk
 - Pemantauan tanggal kedaluwarsa
 - Integrasi pembayaran digital (QRIS/e-wallet)
 - Mode offline-first / sinkronisasi multi-perangkat
@@ -156,6 +168,7 @@ src/
  │    ├── media/        → image processing & R2 client wrapper
  │    ├── transaction/
  │    ├── debt/
+ │    ├── consignment/   → penitip, penerimaan/retur titipan, saldo & setoran (3.14)
  │    ├── dashboard/
  │    └── report/
  ├── repositories/     → hanya wrapper object storage (storage.repository.ts)
@@ -164,6 +177,8 @@ src/
  └── app.ts / server.ts
 ```
 Setiap module (mis. `product/`) berisi: `*.routes.ts`, `*.controller.ts`, `*.service.ts`, `*.schema.ts`.
+
+**Catatan modul `consignment/`:** modul ini memakai **dua prefix routing** (`/consignors` untuk data penitip, `/consignment` untuk penerimaan/retur/riwayat pergerakan) sehingga mengekspor dua router dari satu file `consignment.routes.ts`. Service-nya juga melayani sebagian kebutuhan laporan (`GET /reports/consignment`, 5.8) dan dashboard (`totalKewajibanPenitip`, 5.7), karena seluruh rumus kewajiban penitip dipusatkan di satu tempat agar tidak ada duplikasi perhitungan.
 
 **Catatan modul `user/` dan `stock/`:** keduanya tidak dibuat sebagai direktori terpisah.
 - `stock/` — sesuai 3.5, stok bukan modul routing; seluruh endpoint stok (`/products/low-stock`, `/products/:id/stock-threshold`, `/products/:id/stock-adjustment`) berada di modul `product/`, dan perubahan stok sebagai efek samping transaksi berada di `transaction.service.ts`.
@@ -179,6 +194,7 @@ Setiap module (mis. `product/`) berisi: `*.routes.ts`, `*.controller.ts`, `*.ser
 - **Storage-agnostic media service** — `media.service.ts` mengakses R2 melalui interface `IObjectStorage` (bukan memanggil S3 client langsung dari service lain), sehingga jika provider storage berpindah di kemudian hari, cukup mengganti implementasi tanpa mengubah business logic modul lain.
 - **Proses gambar sebelum penyimpanan, bukan sesudah** — optimasi (resize/kompresi) dilakukan di server sebelum file diunggah ke R2, agar ukuran file yang tersimpan sudah efisien dan biaya storage/bandwidth terkendali (selaras NFR-01).
 - **Konsisten dengan BR & FR SRS** — setiap keputusan desain merujuk balik ke ID FR/BR agar tidak menyimpang dari kebutuhan bisnis yang sudah disepakati client.
+- **Saldo/kewajiban diturunkan, bukan disimpan** — kewajiban ke penitip selalu dihitung dari data sumber (`DetailTransaction` + `ConsignorPayment`) alih-alih dipelihara sebagai kolom/tabel akrual, sehingga void dan koreksi otomatis ikut terkoreksi tanpa logika rekonsiliasi terpisah (lihat 3.14 & 11.12).
 
 ---
 
@@ -234,6 +250,7 @@ Referensi: memperluas FR-07 (tambah produk) dan FR-09 (ubah produk) pada SRS, kh
 - Modul inti sistem. Menangani pembuatan transaksi (Lunas/Utang) dan void.
 - Seluruh operasi tulis (create, void) dibungkus `prisma.$transaction()` untuk menjamin konsistensi stok, detail transaksi, dan saldo utang (BR-09, BR-13).
 - Aturan batas waktu void (BR-13) dihitung di service layer berdasarkan `createdAt` transaksi dibandingkan waktu server saat ini (bukan waktu client, untuk mencegah manipulasi).
+- **Batas waktu void = 24 jam (rolling window)** sejak `createdAt`, bukan "hari kalender yang sama". Konstanta `VOID_WINDOW_HOURS = 24` di `transaction.service.ts`; perbandingan memakai `isWithinHoursWindow()` dari `utils/date.ts` yang menghitung selisih epoch (UTC), sehingga transaksi pukul 23.00 tanggal 24 masih dapat dibatalkan sampai pukul 23.00 tanggal 25 (lihat 11.10).
 - Referensi: FR-16–FR-29.
 
 ### 3.8 Debt / Installment
@@ -243,12 +260,15 @@ Referensi: memperluas FR-07 (tambah produk) dan FR-09 (ubah produk) pada SRS, kh
 
 ### 3.9 Dashboard
 - Endpoint agregasi read-only yang menggabungkan data dari Product, Transaction, dan Debt untuk satu response ringkas (menghindari client melakukan banyak request terpisah — selaras NFR-01 target waktu muat).
-- Referensi: FR-43–FR-45.
+- Sejak revisi konsinyasi, ringkasan juga menyertakan `totalKewajibanPenitip` (jumlah saldo positif semua penitip) yang dihitung lewat service konsinyasi agar rumus kewajiban tidak terduplikasi (3.14).
+- Referensi: FR-43–FR-45, FR-49.
 
 ### 3.10 Report & Trend
 - Query agregasi berbasis rentang tanggal (`GROUP BY`, `SUM`) untuk omzet, profit, dan tren produk terlaris.
-- Ekspor Excel menggunakan **ExcelJS**, ekspor PDF menggunakan **PDFKit** (lihat Lampiran B).
-- Referensi: FR-35–FR-42.
+- `GET /reports/sales` mendapat breakdown `perTipe` (milik sendiri vs titipan) tanpa mengubah field lama (5.8).
+- Laporan konsinyasi (`GET /reports/consignment`) logikanya berada di `consignment.service.ts` dan dipanggil dari controller report, agar seluruh rumus kewajiban penitip terpusat di satu modul (3.14).
+- Ekspor Excel menggunakan **ExcelJS**, ekspor PDF menggunakan **PDFKit** (lihat Lampiran B). Ekspor laporan konsinyasi belum tersedia (5.8).
+- Referensi: FR-35–FR-42, FR-46, FR-49.
 
 ### 3.11 Middleware
 | Middleware | Fungsi |
@@ -269,9 +289,89 @@ Lihat Bagian 7 secara detail. Prinsip umum: setiap error (validasi, business rul
 ### 3.13 Utilities
 - `utils/response.ts` — helper untuk membentuk response sukses/gagal yang konsisten (Bagian 5.1).
 - `utils/money.ts` — format Rupiah untuk kebutuhan ekspor/label (BR-16).
-- `utils/date.ts` — perhitungan rentang waktu dan hari kalender (mis. cutoff void BR-13, batas "hari ini"/"bulan berjalan" dashboard) menggunakan **date-fns** + **date-fns-tz** agar konsisten dengan timezone `Asia/Jakarta`. Fungsi `isSameCalendarDay` dipakai bersama oleh `transaction.service` (void) dan pengujian.
+- `utils/date.ts` — perhitungan rentang waktu dan hari kalender (mis. batas "hari ini"/"bulan berjalan" dashboard, rentang laporan) menggunakan **date-fns** + **date-fns-tz** agar konsisten dengan timezone `Asia/Jakarta`. Untuk void window BR-13 dipakai `isWithinHoursWindow(target, reference, hours)` — perbandingan berbasis selisih epoch, bebas zona waktu, karena batasnya berupa rolling window 24 jam dan bukan batas hari kalender.
 - `utils/asyncHandler.ts` — wrapper agar error di fungsi `async` controller otomatis diteruskan ke `errorHandler` tanpa perlu `try/catch` berulang.
 - `utils/objectKey.ts` — helper pembuatan object key R2 yang konsisten dan aman (`makeProductPhotoKey`), menambahkan UUID agar tidak collision.
+
+### 3.14 Konsinyasi (Penitipan Barang)
+> Ditempatkan di akhir Bagian 3 agar penomoran sub-bagian lain (3.1–3.13) yang sudah dirujuk dokumen lain tidak berubah. Secara alur baca, modul ini berdiri sejajar dengan Transaction (3.7) dan Debt (3.8).
+
+Modul `src/modules/consignment/` menangani seluruh siklus barang titipan pihak ketiga: data penitip, penerimaan/retur barang, kewajiban (saldo) per penitip, dan setoran ke penitip.
+
+**Prinsip inti.** Barang titipan **bukan** entitas terpisah — ia baris `Product` biasa dengan `tipe = TITIPAN` dan `consignorId` terisi. Alur kasir, transaksi, void, dan stok tidak dipisah. Untuk produk titipan, `Product.hargaModal` bermakna **harga setor per unit ke penitip**; karena `DetailTransaction` sudah menyimpan `hargaModalSnapshot`, rumus laba (jual − modal) tidak berubah dan laba produk titipan otomatis benar.
+
+**Data penitip (Consignor).**
+- CRUD: list (filter `status`, `search` nama, `punyaSaldo`, pagination), detail (+ ringkasan: jumlah produk titipan aktif & total stok titipan), tambah, ubah, ubah status.
+- `Consignor` tidak pernah di-hard-delete; penonaktifan adalah satu-satunya "penghapusan" (BR-21).
+- Status penitip (`AKTIF`/`NONAKTIF`) dan status produk (`AKTIF`/`NONAKTIF`) adalah **dua level terpisah**, dan **saldo tidak bergantung pada keduanya** (11.13).
+
+**Penerimaan & retur titipan (ConsignmentMovement).**
+- `POST /consignment/receipts` `{ productId, jumlah, catatan? }` — menambah stok produk titipan dan mencatat `ConsignmentMovement` bertipe `TERIMA` dengan `stokSebelum`/`stokSesudah`.
+- `POST /consignment/returns` `{ productId, jumlah, catatan? }` — mengurangi stok dan mencatat `RETUR`; retur melebihi stok ditolak `StockExceededError` (BR-19).
+- Keduanya append-only. `consignorId` pada movement **diambil dari produk**, bukan dari input client (mencegah movement tercatat atas penitip yang salah).
+- `GET /consignment/movements` — riwayat dengan filter `consignorId`, `productId`, `tipe`, `startDate`, `endDate`, pagination.
+- Retur **tidak** mensyaratkan produk/penitip `AKTIF`, karena retur justru dipakai untuk mengosongkan stok sebelum produk/penitip dinonaktifkan (skenario "penitip berhenti").
+- Penerimaan mensyaratkan produk `TITIPAN` berstatus `AKTIF` milik penitip `AKTIF` (BR-25).
+
+**Kewajiban/saldo penitip (diturunkan, tidak disimpan).**
+```
+saldo(consignor) = SUM(d.jumlah × d.hargaModalSnapshot)   -- DetailTransaction d
+                                                          -- JOIN Transaction t (t.statusTransaksi = 'AKTIF')
+                                                          -- JOIN Product p (p.consignorId = consignor)
+                 − SUM(ConsignorPayment.jumlahBayar)      -- semua setoran penitip tsb
+```
+- Kewajiban **timbul saat barang terjual**, terlepas dari status pembayaran pembeli (LUNAS maupun UTANG), karena toko sudah menerima/mengakui penjualan (11.12).
+- Karena diturunkan, **void otomatis mengoreksi kewajiban** tanpa logika tambahan (BR-22).
+- Tidak memfilter status produk maupun status penitip (11.13).
+- Perhitungan memakai `$queryRaw` + `Prisma.sql` (tagged template, bukan string concatenation) dan hasilnya dikonversi ke `Prisma.Decimal`; tidak ada float JS.
+- Endpoint: `GET /consignors/:id/balance` → `{ consignorId, totalTerjualModal, totalDisetor, saldo }` (all-time, string desimal 2 digit).
+
+**Setoran ke penitip (ConsignorPayment).**
+- `POST /consignors/:id/payments` `{ jumlahBayar, catatan? }` — append-only, tidak ada endpoint edit/hapus (koreksi setoran salah input = Future Development).
+- Di dalam `prisma.$transaction`: lock baris `Consignor` (`SELECT ... FOR UPDATE`), hitung ulang saldo, tolak bila `saldo ≤ 0` atau `jumlahBayar > saldo` (`ConsignorOverpaymentError`, BR-20), lalu insert `ConsignorPayment` beserta `saldoSetelahBayar` sebagai snapshot audit.
+- Setoran **tetap diizinkan** untuk penitip `NONAKTIF` (BR-23) — penitip yang berhenti menitip tetap harus dibayar.
+- `GET /consignors/:id/payments` — riwayat setoran (pagination, urut `tanggalBayar` terbaru).
+- `saldoSetelahBayar` boleh menjadi baseline yang "basi" bila transaksi terkait di-void setelah setoran; itu memang disengaja (snapshot audit), dan saldo **aktual** tetap dihitung ulang dari sumber (BR-22).
+
+**Perubahan pada modul `product`.**
+- `POST /products` menerima `tipe` (default `MILIK_SENDIRI`) dan `consignorId`; divalidasi di Zod (bentuk) **dan** service (BR-17, BR-18, BR-23).
+- `PUT /products/:id` **menolak** perubahan `tipe`/`consignorId` — ditolak di service dengan `422` agar pesannya jelas (bukan `400` tanpa penjelasan). `tipe`/`consignorId` tetap ada di schema hanya agar nilai yang tidak berubah dapat dikirim ulang oleh client lama.
+- `PATCH /products/:id/status` menerapkan BR-24 untuk produk titipan.
+- `DELETE /products/:id` — selain cek `DetailTransaction` (BR-12), kini juga mengecek `ConsignmentMovement` agar FK `ON DELETE RESTRICT` tidak muncul sebagai error 500 (BR-26).
+- `GET /products` menerima filter `tipe` dan `consignorId`; response produk menyertakan `tipe` dan `consignor: { id, nama } | null`.
+
+**Laporan & dashboard.**
+- `GET /reports/sales` menambahkan `perTipe: { MILIK_SENDIRI: { omzet, profit }, TITIPAN: { omzet, profit } }` tanpa mengubah field lama (backward compatible), dihitung dari snapshot + join `Product.tipe`, hanya transaksi `AKTIF`.
+- `GET /reports/consignment` — laporan konsinyasi per penitip dalam periode (lihat 5.8).
+- `GET /dashboard/summary` menambahkan `totalKewajibanPenitip` = jumlah **saldo positif** seluruh penitip, termasuk yang `NONAKTIF` (lihat 5.7).
+
+**Pemetaan business rule.** Label BR-A…BR-J pada spesifikasi fitur dipetakan ke nomor lanjutan SRS/SDD: BR-A→**BR-17**, BR-B→**BR-18**, BR-C→**BR-19**, BR-D→**BR-20**, BR-E→**BR-21**, BR-F→**BR-22**, BR-G→**BR-23**, BR-H→**BR-24**, BR-I→**BR-25**, BR-J→**BR-26**.
+
+**Daftar business rule konsinyasi:**
+
+| ID | Aturan |
+|---|---|
+| **BR-17** | Produk `TITIPAN` wajib punya `consignorId`; produk `MILIK_SENDIRI` wajib `consignorId = null`. `tipe` dan `consignorId` **tidak dapat diubah** setelah produk dibuat. |
+| **BR-18** | Pada produk `TITIPAN`, `hargaJual` harus ≥ `hargaModal` (harga setor). Pelanggaran → `422 BUSINESS_RULE_VIOLATION`. |
+| **BR-19** | Penerimaan titipan menambah stok; retur mengurangi stok dan tidak boleh melebihi stok saat ini (BR-04 tetap berlaku). Keduanya dicatat append-only. |
+| **BR-20** | Setoran: `jumlahBayar > 0` dan tidak boleh melebihi saldo kewajiban saat itu; dicek ulang di dalam transaction dengan locking per `Consignor`. Bila saldo ≤ 0, setoran apa pun ditolak. |
+| **BR-21** | Consignor tidak pernah dihapus bila sudah punya produk/riwayat. Penonaktifan hanya diizinkan bila **semua** produk titipannya berstok 0; produk yang masih `AKTIF` (stok 0) otomatis menjadi `NONAKTIF` dalam transaction yang sama. Saldo kewajiban **tidak** harus 0. Bila masih ada stok > 0 → tolak `422` dengan `details.products`. Mengaktifkan kembali diizinkan kapan saja; produk tidak ikut aktif otomatis. |
+| **BR-22** | Void transaksi boleh dilakukan walau menyebabkan saldo consignor negatif (kelebihan setor). Saldo negatif ditampilkan apa adanya; void **tidak** diblokir. |
+| **BR-23** | Consignor `NONAKTIF` tidak dapat dipakai membuat produk titipan baru, menerima titipan (`receipt`), atau mengaktifkan produk titipannya. **Setoran tetap diizinkan.** |
+| **BR-24** | Produk `TITIPAN` hanya dapat di-set `NONAKTIF` bila stok = 0, dan hanya dapat di-set `AKTIF` bila consignor-nya `AKTIF`. Produk `MILIK_SENDIRI` tidak terpengaruh. |
+| **BR-25** | `receipt` hanya untuk produk `TITIPAN` berstatus `AKTIF` milik consignor `AKTIF`. |
+| **BR-26** | Produk titipan yang sudah punya riwayat transaksi **atau** riwayat penerimaan/retur tidak dapat di-hard-delete (BR-12 tetap berlaku). |
+
+**Daftar functional requirement konsinyasi (penomoran lanjutan setelah FR-45):**
+
+| ID | Requirement |
+|---|---|
+| **FR-46** | Owner dapat mengelola data penitip (tambah, ubah, lihat daftar/detail, aktif/nonaktif) dan membuat produk titipan yang terhubung ke penitip, termasuk filter produk berdasarkan tipe & penitip. |
+| **FR-47** | Owner dapat mencatat penerimaan barang titipan (menambah stok) dan retur ke penitip (mengurangi stok), serta melihat riwayat pergerakannya. |
+| **FR-48** | Owner dapat melihat kewajiban/saldo per penitip, mencatat setoran ke penitip, dan melihat riwayat setoran. |
+| **FR-49** | Owner dapat melihat laporan konsinyasi per penitip untuk suatu periode dan total kewajiban penitip pada dashboard. |
+
+Referensi: FR-46–FR-49, BR-17–BR-26.
 
 ---
 
@@ -297,6 +397,8 @@ model User {
   refreshTokens RefreshToken[]
   sessions      Session[] // dipakai jika AUTH_STRATEGY=session
   stockAdjustments StockAdjustment[]
+  consignmentMovements ConsignmentMovement[] // konsinyasi
+  consignorPayments    ConsignorPayment[]     // konsinyasi
 }
 
 model RefreshToken {
@@ -322,11 +424,16 @@ model Product {
   id            String   @id @default(uuid())
   nama          String
   kategori      String
+  // Untuk produk TITIPAN, hargaModal = harga setor per unit ke penitip (BR-18).
   hargaJual     Decimal  @db.Decimal(12, 2)
   hargaModal    Decimal  @db.Decimal(12, 2)
   stok          Int      @default(0)
   stokMinimum   Int      @default(0)
   status        ProductStatus @default(AKTIF)
+  // BR-17: tipe & consignorId IMMUTABLE setelah produk dibuat.
+  tipe          ProductType   @default(MILIK_SENDIRI)
+  consignorId   String?
+  consignor     Consignor?    @relation(fields: [consignorId], references: [id])
   fotoKey       String?  // object key di Cloudflare R2, mis. "products/{id}/{uuid}.webp"
   fotoUrl       String?  // URL publik hasil upload, dikirim ke frontend
   createdAt     DateTime @default(now())
@@ -334,14 +441,92 @@ model Product {
 
   detailTransaksi DetailTransaction[]
   stockAdjustments StockAdjustment[]
+  consignmentMovements ConsignmentMovement[]
 
   @@index([status])
   @@index([kategori])
+  @@index([tipe])
+  @@index([consignorId])
 }
 
 enum ProductStatus {
   AKTIF
   NONAKTIF
+}
+
+enum ProductType {
+  MILIK_SENDIRI
+  TITIPAN
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KONSINYASI (Penitipan Barang) — BR-17…BR-26
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Consignor {
+  id        String          @id @default(uuid())
+  nama      String
+  noHp      String?
+  catatan   String?
+  status    ConsignorStatus @default(AKTIF)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  products  Product[]
+  movements ConsignmentMovement[]
+  payments  ConsignorPayment[]
+
+  @@index([status])
+}
+
+enum ConsignorStatus {
+  AKTIF
+  NONAKTIF
+}
+
+// Append-only. Mencatat penerimaan/retur barang titipan beserta jejak stok.
+// `jumlah` selalu positif; arah ditentukan oleh `tipe`.
+model ConsignmentMovement {
+  id            String                  @id @default(uuid())
+  consignorId   String                  // diambil dari produk, bukan input client
+  consignor     Consignor               @relation(fields: [consignorId], references: [id])
+  productId     String
+  product       Product                 @relation(fields: [productId], references: [id])
+  tipe          ConsignmentMovementType
+  jumlah        Int
+  stokSebelum   Int
+  stokSesudah   Int
+  catatan       String?
+  dicatatOlehId String
+  dicatatOleh   User                    @relation(fields: [dicatatOlehId], references: [id])
+  createdAt     DateTime                @default(now())
+
+  @@index([consignorId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+enum ConsignmentMovementType {
+  TERIMA
+  RETUR
+}
+
+// Setoran ke penitip. Append-only: tidak ada endpoint edit/hapus.
+// `saldoSetelahBayar` adalah snapshot audit; saldo AKTUAL selalu diturunkan
+// ulang dari sumber (BR-22) sehingga boleh tidak sama bila ada void menyusul.
+model ConsignorPayment {
+  id                String   @id @default(uuid())
+  consignorId       String
+  consignor         Consignor @relation(fields: [consignorId], references: [id])
+  tanggalBayar      DateTime @default(now())
+  jumlahBayar       Decimal  @db.Decimal(12, 2)
+  saldoSetelahBayar Decimal  @db.Decimal(12, 2)
+  catatan           String?
+  dicatatOlehId     String
+  dicatatOleh       User     @relation(fields: [dicatatOlehId], references: [id])
+  createdAt         DateTime @default(now())
+
+  @@index([consignorId])
 }
 
 model Transaction {
@@ -442,6 +627,14 @@ model StockAdjustment {
 - `Product (1) — (N) StockAdjustment` — riwayat penyesuaian stok manual untuk audit (BR-04, FR-15).
 - `User (1) — (N) StockAdjustment` — mencatat siapa yang melakukan penyesuaian.
 
+**Konsinyasi (BR-17–BR-26):**
+- `Consignor (1) — (N) Product` — satu penitip dapat menitipkan banyak produk; `Product.consignorId` **nullable** karena produk `MILIK_SENDIRI` tidak punya penitip. Relasi ditegakkan oleh CHECK constraint, bukan NOT NULL, agar kedua tipe produk hidup di satu tabel (11.11).
+- `Consignor (1) — (N) ConsignmentMovement` dan `Product (1) — (N) ConsignmentMovement` — riwayat penerimaan/retur. `consignorId` didenormalisasi dari produk agar riwayat per penitip dapat di-query tanpa join.
+- `Consignor (1) — (N) ConsignorPayment` — riwayat setoran ke penitip (append-only).
+- `User (1) — (N) ConsignmentMovement` dan `User (1) — (N) ConsignorPayment` — siapa yang mencatat penerimaan/retur/setoran (audit trail).
+- `DetailTransaction (N) — (1) Product` **tetap** menjadi satu-satunya sumber angka kewajiban: tidak ada tabel akrual terpisah, sehingga kewajiban penitip = agregasi `DetailTransaction` (transaksi `AKTIF`) − `ConsignorPayment` (11.12).
+- Semua FK konsinyasi memakai `ON DELETE RESTRICT`: penitip/produk yang sudah punya riwayat tidak dapat dihapus fisik (BR-21, BR-26).
+
 ### 4.4 Constraint
 | Constraint | Diterapkan di | Referensi |
 |---|---|---|
@@ -458,7 +651,25 @@ model StockAdjustment {
 | Ukuran file upload ≤ `MAX_UPLOAD_SIZE_MB` (default 5MB) | Multer `limits.fileSize` | Perluasan FR-07/FR-09, NFR-01 |
 | Object R2 lama dihapus saat foto diganti/produk dihapus | `media.service` (dijalankan setelah update DB berhasil, lihat 7.6) | Kebersihan storage |
 
-Prisma migration menyertakan `CHECK` constraint tambahan via raw SQL (`ALTER TABLE ... ADD CONSTRAINT`) untuk aturan yang bisa ditegakkan di level DB, sebagai lapisan pertahanan kedua selain validasi aplikasi (defense in depth).
+**Konsinyasi (BR-17–BR-26):**
+
+| Constraint | Diterapkan di | Referensi |
+|---|---|---|
+| `(tipe = 'TITIPAN' AND consignorId IS NOT NULL) OR (tipe = 'MILIK_SENDIRI' AND consignorId IS NULL)` | Zod (400) + `CHECK` constraint DB `Product_tipe_consignor_check` | BR-17 |
+| `tipe` & `consignorId` tidak berubah setelah produk dibuat | Service layer (menolak `422` bila nilainya berubah) | BR-17 |
+| `hargaJual >= hargaModal` untuk produk `TITIPAN` | Service layer, dicek ulang saat `hargaJual`/`hargaModal` berubah | BR-18 |
+| `jumlah > 0` pada `ConsignmentMovement` | Zod + `CHECK` constraint DB `ConsignmentMovement_jumlah_check` | BR-19 |
+| `stokSesudah >= 0` pada `ConsignmentMovement` | `CHECK` constraint DB `ConsignmentMovement_stokSesudah_check` | BR-19, BR-04 |
+| Retur tidak melebihi stok saat ini | Service layer, dicek ulang di dalam transaction + row lock | BR-19 |
+| `jumlahBayar > 0` pada `ConsignorPayment` | Zod (400) + `CHECK` constraint DB `ConsignorPayment_jumlahBayar_check` | BR-20 |
+| `jumlahBayar <= saldo` dan `saldo > 0` saat insert setoran | Service layer, dihitung ulang di dalam transaction + row lock `Consignor` (`FOR UPDATE`) | BR-20 |
+| Penonaktifan consignor hanya jika semua produk titipannya berstok 0 | Service layer, dicek ulang di dalam transaction | BR-21 |
+| Penerimaan hanya untuk produk `TITIPAN` `AKTIF` milik consignor `AKTIF` | Service layer, dicek ulang di dalam transaction | BR-25 |
+| Produk `TITIPAN` hanya `NONAKTIF` bila stok 0; hanya `AKTIF` bila consignor `AKTIF` | Service layer | BR-24 |
+| Produk titipan dengan riwayat transaksi/pergerakan tidak dapat di-hard-delete | Service layer (cek `DetailTransaction` & `ConsignmentMovement`) + FK `RESTRICT` | BR-26, BR-12 |
+| Penitip tidak pernah dihapus bila sudah punya produk/riwayat | FK `RESTRICT` pada `Product.consignorId`, `ConsignmentMovement.consignorId`, `ConsignorPayment.consignorId` | BR-21 |
+
+Prisma migration menyertakan `CHECK` constraint tambahan via raw SQL (`ALTER TABLE ... ADD CONSTRAINT`) untuk aturan yang bisa ditegakkan di level DB, sebagai lapisan pertahanan kedua selain validasi aplikasi (defense in depth). Migration konsinyasi dibuat dalam dua berkas terpisah (`20261024_add_consignment_stage1`, `20261024_add_consignment_stage2`) dan keduanya **aditif**: kolom `Product.tipe` diberi `DEFAULT 'MILIK_SENDIRI'` sehingga seluruh baris lama otomatis menjadi produk milik sendiri tanpa perlu `UPDATE` manual.
 
 ### 4.5 Index
 - `Product(status)`, `Product(kategori)` — mempercepat filter katalog aktif per kategori.
@@ -466,6 +677,14 @@ Prisma migration menyertakan `CHECK` constraint tambahan via raw SQL (`ALTER TAB
 - `DetailTransaction(transactionId)`, `DetailTransaction(productId)` — mempercepat join saat menampilkan detail transaksi dan tren produk (FR-38).
 - `PaymentHistory(transactionId)` — mempercepat query riwayat cicilan per transaksi (FR-37).
 - `StockAdjustment(productId)` — mempercepat query riwayat penyesuaian stok per produk (FR-15).
+
+**Konsinyasi (BR-17–BR-26):**
+- `Product(tipe)`, `Product(consignorId)` — mempercepat filter katalog "hanya titipan" dan daftar produk per penitip (FR-46).
+- `Consignor(status)` — mempercepat filter daftar penitip aktif/nonaktif (FR-46).
+- `ConsignmentMovement(consignorId)`, `ConsignmentMovement(productId)`, `ConsignmentMovement(createdAt)` — mempercepat riwayat penerimaan/retur per penitip, per produk, dan filter periode (FR-47).
+- `ConsignorPayment(consignorId)` — mempercepat riwayat setoran dan agregasi `SUM(jumlahBayar)` per penitip (FR-48).
+
+> Agregasi kewajiban memakai join `DetailTransaction → Transaction → Product` dengan filter `Transaction.statusTransaksi` dan `Product.consignorId`; index yang sudah ada (`Transaction(statusTransaksi)`, `DetailTransaction(productId)`, `Product(consignorId)`) mencukupi pada skala UMKM. Bila data tumbuh, langkah berikutnya adalah index komposit `Product(consignorId, tipe)` atau tabel ringkasan — tetapi itu **belum** dilakukan karena bertentangan dengan prinsip "kewajiban diturunkan" (11.12).
 
 ### 4.6 Transaction / Atomicity
 Operasi berikut **wajib** dibungkus `prisma.$transaction([...])` atau interactive transaction (`prisma.$transaction(async (tx) => {...})`):
@@ -475,8 +694,18 @@ Operasi berikut **wajib** dibungkus `prisma.$transaction([...])` atau interactiv
 | Membuat transaksi baru | Insert `Transaction` (termasuk `uangDiterima`, `kembalian`, `statusPembayaran`, `sisaSaldoUtang` hasil turunan) + insert N `DetailTransaction` + update stok tiap `Product` (decrement) |
 | Void transaksi | Update `Transaction.statusTransaksi = DIBATALKAN` + update stok tiap `Product` (increment kembali) |
 | Mencatat pelunasan | Insert `PaymentHistory` + update `Transaction.sisaSaldoUtang` + kemungkinan update `Transaction.statusPembayaran = LUNAS` |
+| **Menerima titipan (`receipt`)** | Lock baris `Product` (`SELECT ... FOR UPDATE`) + validasi tipe/status produk & status consignor + update `Product.stok` (increment) + insert `ConsignmentMovement` (`TERIMA`, `stokSebelum`/`stokSesudah`) |
+| **Retur titipan** | Lock baris `Product` + validasi `stokSesudah >= 0` + update `Product.stok` (decrement) + insert `ConsignmentMovement` (`RETUR`, `stokSebelum`/`stokSesudah`) |
+| **Mencatat setoran ke penitip** | Lock baris `Consignor` (`FOR UPDATE`) + hitung ulang saldo di dalam transaction + tolak bila `saldo ≤ 0` atau `jumlahBayar > saldo` + insert `ConsignorPayment` |
+| **Menonaktifkan consignor** | Lock baris `Consignor` + cek ulang seluruh produk titipan `stok > 0` + update `Product.status = NONAKTIF` untuk produk titipan yang masih `AKTIF` (stok 0) + update `Consignor.status = NONAKTIF` |
 
 Untuk kasus pelunasan, digunakan **row-level locking** (`SELECT ... FOR UPDATE` via `tx.$queryRaw` atau pengecekan ulang saldo di dalam transaction) untuk mencegah dua request pembayaran simultan menyebabkan saldo menjadi negatif (race condition) — lihat juga Bagian 7.6.
+
+Pola yang sama dipakai untuk **setoran ke penitip (BR-20)**: baris `Consignor` di-lock, saldo dihitung ulang dari `DetailTransaction` + `ConsignorPayment` di dalam transaction, baru `ConsignorPayment` di-insert. Dengan begitu dua setoran paralel tidak mungkin sama-sama lolos dan membuat saldo negatif (diuji di `consignment.balance.test.ts` dengan pola `Promise.allSettled`, mengikuti `debt.service.test.ts`).
+
+**Receipt/retur** juga memakai `FOR UPDATE` pada baris `Product` karena `stokSebelum`/`stokSesudah` dicatat sebagai jejak audit: tanpa lock, dua receipt paralel dapat menulis angka `stokSebelum` yang sama dan membuat riwayat tidak konsisten dengan stok akhir.
+
+**Penonaktifan consignor** memakai lock pada baris `Consignor` untuk mencegah balapan dengan `receipt`/penjualan yang sedang berjalan — pengecekan "semua stok 0" dilakukan **di dalam** transaction, bukan sebelumnya.
 
 Untuk modul Media, karena operasi melibatkan **dua sistem berbeda** (PostgreSQL dan R2, yang tidak bisa dibungkus dalam satu database transaction), urutan operasi dirancang agar tidak menyisakan state tidak konsisten:
 1. Upload file baru ke R2 **terlebih dahulu** (belum menyentuh DB).
@@ -488,6 +717,7 @@ Untuk modul Media, karena operasi melibatkan **dua sistem berbeda** (PostgreSQL 
 - Migration dikelola dengan `prisma migrate dev` (development) dan `prisma migrate deploy` (production/CI).
 - Seed (`prisma/seed.ts`) menyediakan: 1 akun `User` awal (untuk MVP single-role), beberapa `Product` contoh, agar tim QA dapat langsung menguji tanpa setup manual.
 - Setiap perubahan skema wajib disertai migration file baru (tidak pernah mengedit migration lama yang sudah di-apply ke lingkungan manapun).
+- Fitur konsinyasi menambahkan dua migration **aditif** yang terpisah per tahap: `20261024_add_consignment_stage1` (enum `ProductType`/`ConsignorStatus`/`ConsignmentMovementType`; tabel `Consignor` & `ConsignmentMovement`; kolom `Product.tipe`/`Product.consignorId`; CHECK `Product_tipe_consignor_check`, `ConsignmentMovement_jumlah_check`, `ConsignmentMovement_stokSesudah_check`) dan `20261024_add_consignment_stage2` (tabel `ConsignorPayment`; CHECK `ConsignorPayment_jumlahBayar_check`). Data lama otomatis bernilai `tipe = MILIK_SENDIRI` lewat `DEFAULT` kolom, sehingga migration aman dijalankan pada database yang sudah berisi data.
 
 ---
 
@@ -530,12 +760,12 @@ Untuk modul Media, karena operasi melibatkan **dua sistem berbeda** (PostgreSQL 
 ### 5.3 Product API
 | Method | Endpoint | Deskripsi | Referensi |
 |---|---|---|---|
-| GET | `/products` | List produk (filter: kategori, status, search nama) | FR-06 |
-| GET | `/products/:id` | Detail satu produk | FR-06 |
-| POST | `/products` | Tambah produk baru (tanpa foto; foto diunggah terpisah setelah produk dibuat) | FR-07, FR-08 |
-| PUT | `/products/:id` | Ubah data produk (tidak memengaruhi transaksi lama) | FR-09, FR-10 |
-| DELETE | `/products/:id` | Hard delete jika belum ada riwayat transaksi (turut menghapus foto di R2 jika ada), selain itu ditolak dengan error `PRODUCT_HAS_TRANSACTION` | FR-11, FR-12, BR-12 |
-| PATCH | `/products/:id/status` | Mengubah status `AKTIF`/`NONAKTIF` (soft delete) | FR-12 |
+| GET | `/products` | List produk (filter: kategori, status, search nama, **`tipe`, `consignorId`**) | FR-06, FR-46 |
+| GET | `/products/:id` | Detail satu produk (menyertakan `tipe` dan `consignor: { id, nama } \| null`) | FR-06, FR-46 |
+| POST | `/products` | Tambah produk baru (tanpa foto; foto diunggah terpisah setelah produk dibuat). Menerima `tipe` (default `MILIK_SENDIRI`) dan `consignorId` | FR-07, FR-08, FR-46 |
+| PUT | `/products/:id` | Ubah data produk (tidak memengaruhi transaksi lama). **Menolak perubahan `tipe`/`consignorId`** (`422`) | FR-09, FR-10, BR-17 |
+| DELETE | `/products/:id` | Hard delete jika belum ada riwayat transaksi **maupun riwayat penerimaan/retur titipan**, selain itu ditolak dengan error `PRODUCT_HAS_TRANSACTION` | FR-11, FR-12, BR-12, BR-26 |
+| PATCH | `/products/:id/status` | Mengubah status `AKTIF`/`NONAKTIF` (soft delete). Untuk produk `TITIPAN` berlaku BR-24 (hanya `NONAKTIF` bila stok 0; hanya `AKTIF` bila penitip `AKTIF`) | FR-12, BR-24 |
 | PATCH | `/products/:id/stock-threshold` | Mengatur `stokMinimum` | FR-13 |
 | POST | `/products/:id/photo` | Upload/ganti foto produk (`multipart/form-data`, field `photo`) — proses Multer → Sharp → R2 | Perluasan FR-07/FR-09 |
 | DELETE | `/products/:id/photo` | Menghapus foto produk (object di R2 + kosongkan `fotoKey`/`fotoUrl`) | Perluasan FR-09 |
@@ -572,7 +802,7 @@ Aturan penurunan status pembayaran (diterapkan di `transaction.service.createTra
 | `uangDiterima < total` | `UTANG` | `null` | `total − uangDiterima` | **wajib** (BR-08) |
 
 - `uangDiterima` adalah uang tunai yang diserahkan pembeli saat transaksi; nilainya disimpan apa adanya (termasuk kelebihan bayar) agar struk dapat menampilkan kembalian.
-- Uang muka pada transaksi Utang disimpan pada kolom `Transaction.uangDiterima`/`sisaSaldoUtang`, **bukan** sebagai entri `PaymentHistory` pertama. Konsekuensi yang disengaja: transaksi Utang yang baru dibuat tetap dapat di-void pada hari yang sama (BR-13), karena aturan "tidak boleh void jika sudah ada cicilan" hanya memeriksa `PaymentHistory`.
+- Uang muka pada transaksi Utang disimpan pada kolom `Transaction.uangDiterima`/`sisaSaldoUtang`, **bukan** sebagai entri `PaymentHistory` pertama. Konsekuensi yang disengaja: transaksi Utang yang baru dibuat tetap dapat di-void dalam window 24 jam (BR-13), karena aturan "tidak boleh void jika sudah ada cicilan" hanya memeriksa `PaymentHistory`.
 - Respons `POST/GET /transactions` menyertakan `uangDiterima` dan `kembalian` sebagai string desimal (atau `null`), konsisten dengan field uang lain (Bagian 5.1).
 
 ### 5.6 Debt API
@@ -585,23 +815,117 @@ Aturan penurunan status pembayaran (diterapkan di `transaction.service.createTra
 ### 5.7 Dashboard API
 | Method | Endpoint | Deskripsi | Referensi |
 |---|---|---|---|
-| GET | `/dashboard/summary` | Omzet & profit periode berjalan, produk low-stock, total saldo utang | FR-43–FR-45 |
+| GET | `/dashboard/summary` | Omzet & profit periode berjalan, produk low-stock, total saldo utang, **total kewajiban penitip** | FR-43–FR-45, FR-49 |
 
 Endpoint ini **tidak menerima query parameter**: "periode berjalan" didefinisikan tetap sebagai *hari ini* dan *bulan berjalan* menurut timezone `Asia/Jakarta`. Kebutuhan analisis rentang tanggal bebas dilayani oleh Report API (5.8).
+
+**Field baru (revisi konsinyasi):** `totalKewajibanPenitip` — string desimal 2 digit berisi jumlah **saldo positif** seluruh penitip, termasuk yang `NONAKTIF`. Penitip yang saldonya negatif (kelebihan setor akibat void, BR-22) **tidak** mengurangi nilai ini, karena kewajiban bersifat per-penitip dan tidak saling hapus. Field lama (`hariIni`, `bulanBerjalan`, `produkLowStock`, `totalSaldoUtang`) tidak berubah.
 
 ### 5.8 Report API
 | Method | Endpoint | Deskripsi | Referensi |
 |---|---|---|---|
-| GET | `/reports/sales?startDate=&endDate=` | Laporan omzet & profit per periode | FR-35, FR-36, FR-39 |
+| GET | `/reports/sales?startDate=&endDate=` | Laporan omzet & profit per periode, **termasuk breakdown `perTipe`** | FR-35, FR-36, FR-39, FR-46 |
 | GET | `/reports/debts?startDate=&endDate=` | Laporan utang per periode | FR-37 |
 | GET | `/reports/product-trend?startDate=&endDate=` | Tren produk terlaris | FR-38 |
+| GET | `/reports/consignment?startDate=&endDate=` | Laporan konsinyasi per penitip | FR-49 |
 | GET | `/reports/sales/export?format=xlsx\|pdf&startDate=&endDate=` | Ekspor laporan penjualan | FR-40, FR-42 |
 | GET | `/reports/debts/export?format=xlsx\|pdf&startDate=&endDate=` | Ekspor laporan utang | FR-41, FR-42 |
 
 Nama parameter periode pada implementasi adalah **`startDate`/`endDate`** (format `YYYY-MM-DD`), bukan `start`/`end`. Ini mengikuti konvensi yang seragam dengan `GET /transactions` sehingga frontend memakai satu pola penamaan yang sama di semua endpoint berperiode.
 
+**Perubahan `GET /reports/sales` (backward compatible).** Response mendapat field tambahan:
+
+```json
+"perTipe": {
+  "MILIK_SENDIRI": { "omzet": "20000.00", "profit": "8000.00" },
+  "TITIPAN":       { "omzet": "40000.00", "profit": "16000.00" }
+}
+```
+
+Dihitung dari `DetailTransaction` (snapshot) yang di-join ke `Product.tipe`; hanya transaksi `AKTIF`. Total pada field lama (`omzet`, `profit`) tetap sama dengan jumlah kedua tipe, sehingga client lama tidak perlu berubah.
+
+**`GET /reports/consignment` — struktur response:**
+```json
+{
+  "success": true,
+  "data": {
+    "periode": { "start": "2026-10-01", "end": "2026-10-31" },
+    "totalModalPeriode": "40000.00",
+    "totalDisetorPeriode": "15000.00",
+    "totalSaldoAkhir": "25000.00",
+    "consignors": [
+      {
+        "consignorId": "uuid",
+        "nama": "Ibu Sari",
+        "status": "AKTIF",
+        "terjualPeriode": "60000.00",
+        "modalPeriode": "40000.00",
+        "disetorPeriode": "15000.00",
+        "saldoAkhir": "25000.00"
+      }
+    ]
+  }
+}
+```
+
+Definisi tiap kolom:
+- `terjualPeriode` — omzet penjualan barang titipan penitip tersebut dalam periode (transaksi `AKTIF`).
+- `modalPeriode` — kewajiban yang **timbul** dalam periode (`SUM(jumlah × hargaModalSnapshot)`).
+- `disetorPeriode` — setoran yang **dicatat** dalam periode (`SUM(jumlahBayar)` berdasarkan `tanggalBayar`).
+- `saldoAkhir` — saldo **all-time** (identik dengan `GET /consignors/:id/balance`), **bukan** saldo per akhir periode. Saldo per akhir periode tidak dapat dihitung tanpa snapshot harian; memilih all-time membuat laporan tetap dapat direkonsiliasi dengan endpoint saldo.
+
+Semua penitip ditampilkan (termasuk `NONAKTIF` dan yang tidak punya transaksi di periode — barisnya bernilai `0.00`) agar saldo tidak "hilang" dari laporan.
+
+**Ekspor laporan konsinyasi (belum diimplementasikan — saran, bukan komitmen).** `GET /reports/consignment/export?format=xlsx|pdf` **tidak** dibuat pada revisi ini. `export.service.ts` saat ini terikat kuat pada bentuk `SalesReportData`/`DebtsReportData` (template kolom & header spesifik per laporan), sehingga menambah laporan ketiga berarti menulis template baru — bukan reuse. Rekomendasi: kerjakan sebagai item terpisah, idealnya setelah `export.service.ts` direfaktor menjadi generik (mis. deskriptor kolom per laporan).
+
 ### 5.9 Error Response
 Lihat format umum pada 5.1. Daftar `code` standar dijabarkan pada Bagian 7.1.
+
+### 5.10 Consignment API
+Seluruh endpoint memerlukan autentikasi (`auth.middleware`) dan validasi Zod (`validate(schema)`).
+
+**Data penitip — prefix `/consignors`**
+
+| Method | Endpoint | Deskripsi | Referensi |
+|---|---|---|---|
+| GET | `/consignors` | List penitip. Filter: `status`, `search` (nama), `punyaSaldo` (`true`/`false`), pagination `page`/`limit` | FR-46, BR-21 |
+| GET | `/consignors/:id` | Detail penitip + `ringkasan` (`jumlahProdukTitipanAktif`, `totalStokTitipan`) | FR-46 |
+| POST | `/consignors` | Tambah penitip `{ nama, noHp?, catatan? }` | FR-46 |
+| PUT | `/consignors/:id` | Ubah data penitip `{ nama?, noHp?, catatan? }` | FR-46 |
+| PATCH | `/consignors/:id/status` | Ubah status `AKTIF`/`NONAKTIF` sesuai BR-21 (menolak `422` + `details.products` bila masih ada stok) | FR-46, BR-21 |
+| GET | `/consignors/:id/balance` | Saldo all-time `{ consignorId, totalTerjualModal, totalDisetor, saldo }` | FR-48, BR-20 |
+| GET | `/consignors/:id/payments` | Riwayat setoran (pagination, urut `tanggalBayar` terbaru) | FR-48 |
+| POST | `/consignors/:id/payments` | Catat setoran `{ jumlahBayar, catatan? }` → `201` | FR-48, BR-20, BR-23 |
+
+Catatan `punyaSaldo`: filter ini ada karena saldo **diturunkan**, bukan kolom — tanpa filter, penitip `NONAKTIF` yang masih punya saldo mudah "hilang" dari daftar default. Implementasinya dua tahap (ambil id kandidat → hitung saldo → batasi `where.id IN (...)`) dan memakai arti **saldo ≠ 0** (termasuk saldo negatif akibat void, BR-22).
+
+**Penerimaan, retur & pergerakan — prefix `/consignment`**
+
+| Method | Endpoint | Deskripsi | Referensi |
+|---|---|---|---|
+| POST | `/consignment/receipts` | Terima titipan `{ productId, jumlah, catatan? }` → stok bertambah, `201` | FR-47, BR-19, BR-25 |
+| POST | `/consignment/returns` | Retur ke penitip `{ productId, jumlah, catatan? }` → stok berkurang, `201` | FR-47, BR-19 |
+| GET | `/consignment/movements` | Riwayat pergerakan. Filter: `consignorId`, `productId`, `tipe`, `startDate`, `endDate`, pagination | FR-47 |
+
+**Contoh response `GET /consignors/:id/balance`:**
+```json
+{
+  "success": true,
+  "data": {
+    "consignorId": "uuid",
+    "totalTerjualModal": "20000.00",
+    "totalDisetor": "12500.00",
+    "saldo": "7500.00"
+  }
+}
+```
+Seluruh nilai uang berupa string desimal 2 digit (5.1), termasuk saat `saldo` bernilai negatif (mis. `"-20000.00"`).
+
+**Contoh request `POST /consignors/:id/payments`:**
+```json
+{ "jumlahBayar": 12500, "catatan": "Setoran minggu ke-2" }
+```
+`jumlahBayar` harus `> 0` dengan maksimal 2 angka desimal (Zod, `400`); pelanggaran saldo ditolak `422 BUSINESS_RULE_VIOLATION` dengan pesan yang menyebut saldo saat ini.
 
 ---
 
@@ -686,7 +1010,16 @@ Seluruh controller **tidak boleh** melempar HTTP status langsung — status dite
 | `MissingDebtorInfoError` | `BUSINESS_RULE_VIOLATION` | BR-08 | AC-05 |
 | `VoidWindowExpiredError` | `BUSINESS_RULE_VIOLATION` | BR-13 | AC-08 |
 | `DebtOverpaymentError` | `BUSINESS_RULE_VIOLATION` | BR-14 | AC-12 |
-| `ProductHasTransactionError` | `PRODUCT_HAS_TRANSACTION` | BR-12 | AC-02 |
+| `ProductHasTransactionError` | `PRODUCT_HAS_TRANSACTION` | BR-12, BR-26 | AC-02 |
+| `ProductNotConsignmentError` | `BUSINESS_RULE_VIOLATION` | BR-19, BR-25 | AC-22 |
+| `ConsignorInactiveError` | `BUSINESS_RULE_VIOLATION` | BR-23 | AC-25 |
+| `ConsignorHasStockError` | `BUSINESS_RULE_VIOLATION` | BR-21 | AC-24 |
+| `ProductHasStockError` | `BUSINESS_RULE_VIOLATION` | BR-24 | AC-24 |
+| `ConsignorOverpaymentError` | `BUSINESS_RULE_VIOLATION` | BR-20 | AC-23 |
+
+**Catatan konsinyasi (BR-17–BR-26).** Seluruh error di atas adalah turunan `BusinessRuleError` sehingga berstatus HTTP `422` dengan `code` default `BUSINESS_RULE_VIOLATION`; tidak ada `code` baru yang dipersempit (berbeda dari `ProductHasTransactionError`) agar frontend cukup membedakan lewat pesan dan `details`. `ConsignorHasStockError` menyertakan `details.products = [{ id, nama, stok }]` agar UI dapat menampilkan daftar produk yang masih berstok.
+
+Aturan bisnis konsinyasi yang **tidak** punya error khusus (dilempar sebagai `BusinessRuleError` generik dengan pesan eksplisit): perubahan `tipe`/`consignorId` (BR-17), `hargaJual < hargaModal` pada produk titipan (BR-18), penerimaan ke produk nonaktif (BR-25), dan `jumlahBayar ≤ 0` di service (BR-20; Zod sudah menangkap lebih dulu untuk request HTTP).
 
 ### 7.5 Database Error
 - Error dari Prisma (mis. `PrismaClientKnownRequestError` untuk unique constraint violation) ditangkap di `errorHandler`, dipetakan ke pesan yang aman ditampilkan ke user (tidak membocorkan detail query/skema), dan tetap dicatat lengkap di log Pino (level `error`) untuk keperluan debugging.
@@ -727,7 +1060,21 @@ describe('AC-04: transaksi menolak jumlah melebihi stok', () => {
   it('should return 422 BUSINESS_RULE_VIOLATION when qty > stock', async () => { ... });
 });
 ```
-Untuk skenario upload foto produk (perluasan FR-07/FR-09 yang belum memiliki ID AC resmi di SRS), test diberi label eksplisit, mis. `describe('Perluasan FR-07: upload foto produk')`, dengan rekomendasi menambahkan AC baru (mis. `AC-18`) pada revisi SRS berikutnya agar traceability tetap penuh. Daftar lengkap pemetaan test ↔ AC dikelola pada Bagian 10 (Traceability Matrix).
+Untuk skenario upload foto produk dan penyesuaian stok manual, SRS v1.1 kini memuat **AC-18** (upload foto) dan **AC-19** (penyesuaian stok manual). Test yang sudah ada masih memakai label eksplisit, mis. `describe('Perluasan FR-07: upload foto produk')`; label tersebut dapat diselaraskan ke `AC-18`/`AC-19` tanpa mengubah perilaku test. Daftar lengkap pemetaan test ↔ AC dikelola pada Bagian 10 (Traceability Matrix).
+
+Pola yang sama dipakai untuk **fitur konsinyasi**: SRS v1.1 sudah memuat **AC-20–AC-26** (satu per kelompok aturan konsinyasi), sementara test yang ada masih memakai label BR langsung, mis. `describe('BR-A: tipe produk dan consignorId')`, `describe('Saldo penitip (BR-D)')`, `describe('BR-F: void transaksi setelah setoran')`. Pemetaan AC ↔ BR untuk konsinyasi:
+
+| AC (SRS v1.1) | Cakupan | BR |
+|---|---|---|
+| AC-20 | Pendaftaran penitip & produk titipan, tipe/penitip immutable | BR-17 |
+| AC-21 | Harga jual produk titipan ≥ harga setor | BR-18 |
+| AC-22 | Penerimaan & retur barang titipan | BR-19 |
+| AC-23 | Saldo penitip & validasi setoran | BR-20 |
+| AC-24 | Penonaktifan penitip & produk titipan | BR-21, BR-24 |
+| AC-25 | Void setelah setoran & setoran pada penitip nonaktif | BR-22, BR-23 |
+| AC-26 | Laporan konsinyasi & total kewajiban penitip | BR-21, BR-22 |
+
+Karena perilaku tidak berubah, penyelarasan nama test ke ID AC dapat dikerjakan kapan saja sebagai perubahan label saja (tidak memengaruhi hasil test). Sampai saat itu, traceability tetap terjaga pada level BR/FR (`backend/docs/TRACEABILITY.md` §6A).
 
 ---
 
@@ -792,13 +1139,17 @@ Karena tidak menggunakan container, environment server (versi Node, versi OS, li
 | SRS FR/BR/AC | Modul Backend | Endpoint | Test Terkait |
 |---|---|---|---|
 | FR-01–FR-05, NFR-05, NFR-06 | Authentication (3.2) | `/auth/*` (5.2) | API: `auth.test.ts` (login, refresh, logout wajib token, brute-force 429, health publik); env: `env.test.ts` |
-| FR-06–FR-15, BR-03, BR-04, BR-12, BR-15 | Product & Stock (3.4, 3.5) | `/products/*` (5.3, 5.4) | Unit: `product.service.test.ts`; API: `product.test.ts` (AC-01, AC-02, AC-03, BR-04, BR-12) |
-| Perluasan FR-07/FR-09 (field `foto_url`, SRS 7.2) | Media & Image Upload (3.6) | `POST/DELETE /products/:id/photo` (5.3) | API: `media.test.ts` (401/400/404/415); unit test dengan mock S3 belum ada — direkomendasikan ditambahkan sebagai AC-18 pada revisi SRS berikutnya |
+| FR-06–FR-15, BR-03, BR-04, BR-12, BR-15 | Product & Stock (3.4, 3.5) | `/products/*` (5.3, 5.4) | Unit: `product.service.test.ts`; API: `product.test.ts` (AC-01, AC-02, AC-03, AC-19, BR-04, BR-12) |
+| Perluasan FR-07/FR-09 (field `foto_url`, SRS 7.2) | Media & Image Upload (3.6) | `POST/DELETE /products/:id/photo` (5.3) | API: `media.test.ts` (AC-18: 401/400/404/415, Sharp menolak berkas corrupt); unit test dengan mock S3 masih belum ada (lihat 8.2) |
 | FR-16–FR-24, BR-05–BR-10 | Transaction (3.7) | `POST /transactions` (5.5) | Unit: `transaction.service.test.ts`; API: `transaction.test.ts` (AC-04, AC-05, AC-05a, AC-05b, AC-06, FR-20) |
 | FR-25–FR-29, BR-13 | Transaction — Void (3.7) | `POST /transactions/:id/void` (5.5) | Unit: `transaction.service.test.ts` (AC-07, AC-08); API: AC-09 lewat `report.test.ts` |
 | FR-30–FR-34, BR-14 | Debt/Installment (3.8) | `/debts/*` (5.6) | Unit: `debt.service.test.ts`; API: `debt.test.ts` (AC-10, AC-11, AC-12) |
-| FR-43–FR-45 | Dashboard (3.9) | `/dashboard/summary` (5.7) | API: `dashboard.test.ts` (AC-17, uang string, low-stock, total utang) |
+| FR-43–FR-45, FR-49 | Dashboard (3.9) | `/dashboard/summary` (5.7) | API: `dashboard.test.ts` (AC-17, uang string, low-stock, total utang) |
 | FR-35–FR-42, BR-11, BR-16 | Report & Trend (3.10) | `/reports/*` (5.8) | API: `report.test.ts` (AC-13–AC-16, ekspor xlsx/pdf) |
+| FR-46, BR-17, BR-18, BR-21, BR-23, BR-24, BR-26 | Konsinyasi — data penitip & produk titipan (3.14) | `/consignors/*` (5.10), `POST/PUT/PATCH/DELETE /products/*` (5.3) | Unit: `consignment.service.test.ts` (BR-A/B/E/G/H/J + snapshot); API: `consignment.test.ts` (AC-20, AC-21, AC-24); Integration: `constraints.test.ts` (CHECK `Product_tipe_consignor_check`) |
+| FR-47, BR-19, BR-25 | Konsinyasi — penerimaan & retur (3.14) | `/consignment/receipts`, `/consignment/returns`, `/consignment/movements` (5.10) | Unit: `consignment.service.test.ts` (BR-C/BR-I); API: `consignment.test.ts` (AC-22); Integration: `constraints.test.ts` (CHECK `ConsignmentMovement_jumlah_check`) |
+| FR-48, BR-20, BR-22 | Konsinyasi — saldo & setoran (3.14) | `/consignors/:id/balance`, `/consignors/:id/payments` (5.10) | Unit: `consignment.balance.test.ts` (saldo, penolakan setoran, concurrency, BR-F void, filter `punyaSaldo`); API: `consignment.test.ts` (AC-23, AC-25); Integration: `constraints.test.ts` (CHECK `ConsignorPayment_jumlahBayar_check`) |
+| FR-49 | Konsinyasi — laporan & dashboard (3.14) | `/reports/consignment` (5.8), `/dashboard/summary` (5.7) | Unit: `consignment.balance.test.ts` (konsistensi laporan ↔ saldo, `totalKewajibanPenitip`); API: `consignment.test.ts` (AC-26) |
 | NFR-01, NFR-02 | Semua modul, termasuk optimasi gambar (3.6) yang menekan waktu muat katalog | — | Performance test |
 | NFR-03, NFR-04 | Arsitektur (2.1) | — | — |
 | NFR-08, NFR-09 | Frontend concern | — | — |
@@ -820,7 +1171,7 @@ Karena tidak menggunakan container, environment server (versi Node, versi OS, li
 **Alasan:** BR-12 & BR-10 mensyaratkan riwayat transaksi tetap utuh dan dapat ditelusuri; `SET NULL` akan menghilangkan referensi produk asal meski snapshot nama/harga tetap ada, sehingga soft delete dipilih agar relasi tetap valid untuk kebutuhan audit di masa depan.
 
 ### 11.3 Transaction Void
-**Keputusan:** Void mengubah status menjadi `DIBATALKAN` (bukan `DELETE`), dan hanya diizinkan dalam batas waktu tertentu, dihitung di server.
+**Keputusan:** Void mengubah status menjadi `DIBATALKAN` (bukan `DELETE`), dan hanya diizinkan dalam **24 jam** setelah transaksi dibuat (rolling window), dihitung di server dari `createdAt` (lihat 11.10).
 **Alternatif dipertimbangkan:** Mengizinkan edit langsung pada transaksi yang sudah tersimpan.
 **Alasan:** BR-13 secara eksplisit melarang data transaksi hilang dari riwayat; mengizinkan edit langsung berisiko merusak akurasi laporan historis (BR-10) dan mempersulit audit. Void dengan status eksplisit menjaga integritas data sekaligus tetap memberi jalan koreksi kesalahan input.
 
@@ -864,7 +1215,60 @@ Karena tidak menggunakan container, environment server (versi Node, versi OS, li
 1. Tetap meminta client memilih `LUNAS`/`UTANG` secara eksplisit (desain awal SRS FR-20).
 2. Menyimpan uang muka transaksi Utang sebagai entri `PaymentHistory` pertama.
 3. Menurunkan status dari `uangDiterima` dan menyimpan uang muka pada kolom `Transaction` (**dipilih**).
-**Alasan:** Pada praktik kasir, status lunas/utang bukan input terpisah melainkan konsekuensi dari uang yang diterima; menurunkannya menghilangkan kemungkinan data tidak konsisten (mis. status LUNAS dengan uang diterima kurang dari total). Opsi 2 ditolak karena akan mengunci transaksi dari void pada hari yang sama (BR-13 menolak void bila sudah ada `PaymentHistory`), padahal koreksi salah input tetap dibutuhkan. Konsekuensi yang diterima: `uangDiterima`/`kembalian` bersifat nullable di DB demi data historis, dan UI tetap perlu menampilkan kedua nilai tersebut agar kasir dapat menyerahkan kembalian.
+**Alasan:** Pada praktik kasir, status lunas/utang bukan input terpisah melainkan konsekuensi dari uang yang diterima; menurunkannya menghilangkan kemungkinan data tidak konsisten (mis. status LUNAS dengan uang diterima kurang dari total). Opsi 2 ditolak karena akan mengunci transaksi dari void dalam window 24 jam (BR-13 menolak void bila sudah ada `PaymentHistory`), padahal koreksi salah input tetap dibutuhkan. Konsekuensi yang diterima: `uangDiterima`/`kembalian` bersifat nullable di DB demi data historis, dan UI tetap perlu menampilkan kedua nilai tersebut agar kasir dapat menyerahkan kembalian.
+
+### 11.10 Batas Waktu Void: 24 Jam Rolling Window (Revisi 2026-10-24)
+**Keputusan:** Batas waktu void (BR-13) adalah **24 jam sejak `createdAt`**, bukan "hari kalender yang sama". Implementasi: konstanta `VOID_WINDOW_HOURS = 24` di `transaction.service.ts` + helper `isWithinHoursWindow(target, reference, hours)` di `utils/date.ts` (selisih epoch, inklusif pada batas 24 jam).
+**Alternatif dipertimbangkan:**
+1. Hari kalender yang sama dalam zona `Asia/Jakarta` (`isSameCalendarDay`, implementasi sebelumnya).
+2. Rolling window 24 jam dari `createdAt` (**dipilih**).
+**Alasan:** Aturan "hari yang sama" menciptakan batas yang tidak seragam bagi kasir — transaksi pukul 23.59 hanya punya waktu koreksi ±1 menit, sedangkan transaksi pukul 00.01 punya hampir 24 jam. Rolling window 24 jam memberi jendela koreksi yang adil dan dapat diprediksi, serta mudah dikomunikasikan ke pengguna ("dapat dibatalkan maksimal 24 jam setelah transaksi"). Perhitungan memakai selisih epoch sehingga tidak terpengaruh zona waktu maupun pergantian hari; nilai `reference` yang lebih awal dari `createdAt` (waktu server mundur) ditolak.
+**Dampak:** Pesan error `VoidWindowExpiredError` menjadi "maksimal 24 jam setelah transaksi dibuat"; test `transaction.service.test.ts` dan `transaction.test.ts` memverifikasi batas 24 jam (termasuk kasus 23 jam masih boleh, 25 jam ditolak). SRS v1.1 sudah menyelaraskan FR-25/BR-13/AC-07/AC-08 ke batas 24 jam, sehingga requirement, desain, dan implementasi identik.
+
+### 11.11 Produk Titipan Memakai Tabel `Product` yang Sama
+**Keputusan:** Barang titipan **tidak** dibuat sebagai tabel/entity terpisah. Ia baris `Product` biasa yang dibedakan oleh `tipe = TITIPAN` + `consignorId`, sehingga alur kasir, transaksi, void, dan stok **tidak dipisah** sama sekali.
+**Alternatif dipertimbangkan:**
+1. Tabel terpisah (`ConsignmentItem`) dengan alur transaksi sendiri.
+2. Tabel `Product` yang sama dengan diskriminator `tipe` (**dipilih**).
+**Alasan:** Tujuan bisnisnya adalah "menjual barang titipan lewat kasir seperti produk biasa". Memisahkan tabel memaksa menduplikasi seluruh alur transaksi/void/laporan/dashboard dan berisiko menghasilkan dua sumber kebenaran untuk stok dan omzet. Dengan satu tabel, `DetailTransaction` tetap menjadi satu-satunya sumber penjualan, snapshot harga tetap bekerja, dan laba produk titipan otomatis benar karena `hargaModalSnapshot` sudah ada. Trade-off yang diterima: `consignorId` harus **nullable** (produk milik sendiri tidak punya penitip), sehingga integritas relasi tipe↔penitip ditegakkan lewat CHECK constraint (4.4), bukan NOT NULL.
+
+### 11.12 Kewajiban Penitip Diturunkan, Bukan Disimpan
+**Keputusan:** Kewajiban ke penitip **tidak** punya tabel akrual/kolom saldo. Nilainya selalu diturunkan dari `SUM(d.jumlah × d.hargaModalSnapshot)` pada `DetailTransaction` milik produk penitip tersebut dengan `Transaction.statusTransaksi = 'AKTIF'`, dikurangi `SUM(ConsignorPayment.jumlahBayar)`.
+**Alternatif dipertimbangkan:**
+1. Tabel `ConsignorLedger` berisi baris akrual per penjualan, lalu saldo di-`UPDATE` setiap transaksi/void.
+2. Kolom `Consignor.saldo` yang dipelihara secara imperatif.
+3. Derivasi saat baca dari data sumber (**dipilih**).
+**Alasan:** Kewajiban adalah fungsi langsung dari penjualan dan setoran; menyimpannya berarti menciptakan state turunan yang harus disinkronkan pada setiap kejadian (create transaksi, void, setoran) — empat jalur tulis yang semuanya bisa gagal/terlewat dan menghasilkan saldo yang menyimpang dari kenyataan. Dengan derivasi, **void otomatis mengoreksi kewajiban** tanpa kode tambahan (BR-22), dan tidak ada kemungkinan saldo "hantu" hasil bug rekonsiliasi. Biaya yang diterima: setiap pembacaan saldo menjalankan satu agregasi join; pada skala UMKM (ribuan baris) ini terukur dan ditopang index yang ada (4.5). Bila kelak volumenya naik, tabel ringkasan dapat ditambahkan sebagai cache — keputusan itu sengaja **tidak** diambil sekarang agar tidak mendahului kebutuhan.
+**Konsekuensi terkait:** `ConsignorPayment.saldoSetelahBayar` disimpan sebagai **snapshot audit** (mencatat saldo saat setoran dicatat), bukan sumber kebenaran. Bila transaksi di-void setelah setoran, snapshot itu menjadi basi dan saldo aktual boleh negatif — keduanya konsisten dengan BR-22.
+
+### 11.13 Status Dua Level & Saldo Independen dari Status
+**Keputusan:** Status ada di **dua level terpisah** — `Product.status` (per produk) dan `Consignor.status` (per penitip) — dan **saldo/kewajiban tidak bergantung pada status keduanya**: saldo dihitung dari semua transaksi `AKTIF` milik penitip, apa pun status produk maupun penitipnya.
+**Alternatif dipertimbangkan:**
+1. Satu status yang diturunkan (penitip nonaktif otomatis membuat semua produknya nonaktif).
+2. Dua status independen dengan saldo tetap dihitung tanpa filter status (**dipilih**).
+**Alasan:** Skenario nyata membutuhkan keduanya terpisah: penitip bisa berhenti menitip (nonaktif) sementara beberapa produknya sudah tidak dijual, tetapi kewajiban atas penjualan lalu tetap harus dibayar. Menghitung saldo dengan filter status akan menghapus kewajiban historis hanya karena status berubah — kesalahan akuntansi. Konsekuensi yang diterima: UI harus menampilkan saldo penitip nonaktif, dan muncul kebutuhan filter `punyaSaldo` pada daftar penitip (5.10) agar penitip nonaktif bersaldo tidak "hilang".
+
+### 11.14 `hargaModal` = Harga Setor untuk Produk Titipan
+**Keputusan:** Untuk produk `TITIPAN`, `Product.hargaModal` bermakna **harga setor per unit ke penitip** — bukan harga beli dari pemasok. `DetailTransaction.hargaModalSnapshot` menyimpan nilai ini saat transaksi dibuat.
+**Alternatif dipertimbangkan:**
+1. Kolom baru `hargaSetor` khusus produk titipan, dan `hargaModal` tetap bermakna modal toko.
+2. Memakai ulang `hargaModal` dengan makna berbeda menurut `tipe` (**dipilih**).
+**Alasan:** Menambah kolom baru berarti menduplikasi field uang di semua jalur produk, snapshot, dan laporan, tanpa manfaat nyata: bagi toko, "modal" sebuah barang titipan **adalah** harga yang harus dibayar ke penitip. Dengan pemakaian ulang, rumus laba (`hargaJualSnapshot − hargaModalSnapshot`) dan laporan `perTipe` bekerja apa adanya, dan kewajiban penitip dapat dihitung dari kolom snapshot yang sudah ada. Trade-off yang diterima: makna `hargaModal` bergantung pada `tipe`, sehingga dokumentasi dan UI wajib memberi label "Harga setor" untuk produk titipan agar tidak disalahartikan.
+
+### 11.15 Batch/FIFO Ditolak
+**Keputusan:** Tidak ada konsep batch, lot, atau FIFO. Barang yang sama dari dua sumber/harga setor berbeda dicatat sebagai **dua baris `Product` terpisah**.
+**Alternatif dipertimbangkan:**
+1. Satu produk dengan riwayat harga setor berlapis (batch/FIFO) dan modal terjual dihitung per lapisan.
+2. Satu produk per kombinasi sumber + harga setor (**dipilih**).
+**Alasan:** Batch/FIFO menuntut entitas lot, alokasi pemotongan stok per lapisan, dan penentuan modal yang keluar per penjualan — kompleksitas besar untuk skenario UMKM di mana penitip yang sama biasanya menitipkan dengan harga setor yang stabil. Memisahkan baris `Product` membuat modal per penjualan **selalu eksak** karena setiap baris hanya punya satu harga setor, tanpa algoritma alokasi. Konsekuensi yang diterima: katalog bisa memuat beberapa baris dengan nama sama (dibedakan kategori/penitip/harga), dan owner perlu menonaktifkan produk lama secara manual saat harga setor berubah.
+
+### 11.16 Penyelarasan SRS/PRD & Cakupan Ekspor Konsinyasi
+**Keputusan:** SDD ini menjadi acuan implementasi fitur konsinyasi. Business rule baru dinomori **BR-17–BR-26** dan FR baru **FR-46–FR-49** sebagai penomoran lanjutan agar tidak bentrok dengan ID yang sudah dipakai SRS v1.0 — dan penomoran itu dipertahankan permanen pada SRS v1.1.
+**Alasan & tindak lanjut:**
+- SRS v1.0 hanya memuat FR-01–FR-45, BR-01–BR-16, dan AC-01–AC-17. Agar ID tidak bentrok, seluruh aturan konsinyasi dipetakan ke nomor lanjutan (lihat tabel pemetaan di 3.14 dan matriks di Bagian 10).
+- **SRS sudah diselaraskan pada v1.1 (2026-10-24):** FR-46–FR-49 (§4.9), BR-17–BR-26 (§5), entity `Consignor`/`ConsignmentMovement`/`ConsignorPayment` + `Product.tipe`/`consignorId` (§7.2, §7.6–7.8), AC-18–AC-19 (foto produk & penyesuaian stok manual), dan AC-20–AC-26 (konsinyasi, §9.7–§9.8). Dengan begitu label test dapat memakai ID AC resmi seperti konvensi 8.5.
+- **PRD sudah diselaraskan pada Revisi 4 (2026-10-24):** modul konsinyasi dipindahkan dari *Future Development* ke MVP, ditambah BR-17–BR-26, US-14–US-17, Flow 8–11, dan acceptance criteria tingkat produk; penanganan barang rusak/hilang/kedaluwarsa, koreksi/pembatalan setoran, serta batch/FIFO ditegaskan tetap di luar scope.
+- Ekspor laporan konsinyasi (`/reports/consignment/export`) **belum** dibuat karena pola `export.service.ts` yang ada tidak dapat dipakai ulang tanpa menulis template baru (lihat 5.8). Ini dicatat sebagai *saran* (Future Development di PRD), bukan bagian dari penyelesaian fitur.
 
 ---
 
@@ -907,6 +1311,11 @@ kendis-market-backend/
 │   │   │   └── media.schema.ts
 │   │   ├── transaction/
 │   │   ├── debt/
+│   │   ├── consignment/
+│   │   │   ├── consignment.routes.ts     → dua router: /consignors & /consignment
+│   │   │   ├── consignment.controller.ts
+│   │   │   ├── consignment.service.ts    → penitip, receipt/retur, saldo, setoran, laporan
+│   │   │   └── consignment.schema.ts
 │   │   ├── dashboard/
 │   │   └── report/
 │   ├── repositories/
@@ -1002,6 +1411,21 @@ Debt
   GET    /api/v1/debts/:transactionId/payments
   POST   /api/v1/debts/:transactionId/payments
 
+Consignor (konsinyasi)
+  GET    /api/v1/consignors
+  GET    /api/v1/consignors/:id
+  POST   /api/v1/consignors
+  PUT    /api/v1/consignors/:id
+  PATCH  /api/v1/consignors/:id/status
+  GET    /api/v1/consignors/:id/balance
+  GET    /api/v1/consignors/:id/payments
+  POST   /api/v1/consignors/:id/payments
+
+Consignment (konsinyasi)
+  POST   /api/v1/consignment/receipts
+  POST   /api/v1/consignment/returns
+  GET    /api/v1/consignment/movements
+
 Dashboard
   GET    /api/v1/dashboard/summary
 
@@ -1009,10 +1433,13 @@ Report
   GET    /api/v1/reports/sales
   GET    /api/v1/reports/debts
   GET    /api/v1/reports/product-trend
+  GET    /api/v1/reports/consignment
   GET    /api/v1/reports/sales/export
   GET    /api/v1/reports/debts/export
 ```
 
+Catatan: `/reports/consignment/export` **belum tersedia** — lihat 5.8 dan 11.16.
+
 ---
 
-*Dokumen ini merupakan acuan desain teknis backend Kendi's Market, diturunkan dari SRS Kendi's Market v1.0 dan PRD Kendi's Market — Revisi 2. Setiap perubahan pada dokumen acuan tersebut sebaiknya direfleksikan kembali pada SDD ini, khususnya pada Bagian 10 (Traceability Matrix).*
+*Dokumen ini merupakan acuan desain teknis backend Kendi's Market, diturunkan dari SRS Kendi's Market v1.1 dan PRD Kendi's Market — Revisi 4. Setiap perubahan pada dokumen acuan tersebut sebaiknya direfleksikan kembali pada SDD ini, khususnya pada Bagian 10 (Traceability Matrix).*

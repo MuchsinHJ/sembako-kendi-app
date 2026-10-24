@@ -10,6 +10,7 @@
 import { PaymentStatus, TransactionStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import * as transactionService from '../../src/modules/transaction/transaction.service.js';
+import { isWithinHoursWindow } from '../../src/utils/date.js';
 import { prisma } from '../../src/config/db.js';
 import {
   NotFoundError,
@@ -17,6 +18,7 @@ import {
   StockExceededError,
   MissingDebtorInfoError,
   BusinessRuleError,
+  VoidWindowExpiredError,
 } from '../../src/utils/errors.js';
 
 describe('Transaction Service', () => {
@@ -201,7 +203,7 @@ describe('Transaction Service', () => {
       expect(transaction.statusPembayaran).toBe(PaymentStatus.UTANG);
       expect(transaction.sisaSaldoUtang?.toString()).toBe('20000');
       // Opsi A: uang muka tidak dibuat sebagai entri PaymentHistory,
-      // sehingga transaksi hari yang sama masih dapat di-void (BR-13).
+      // sehingga transaksi masih dapat di-void selama masih dalam window 24 jam (BR-13).
       expect(transaction.payments).toHaveLength(0);
     });
 
@@ -421,6 +423,28 @@ describe('Transaction Service', () => {
   });
 
   describe('voidTransaction', () => {
+    it('FR-25: BR-13 - Helper window 24 jam menerima tepat di batas dan menolak setelahnya', () => {
+      const created = new Date('2026-10-24T00:00:00.000Z');
+      const HOUR = 60 * 60 * 1000;
+
+      // Tepat 24 jam setelah transaksi dibuat → masih dalam window (inklusif)
+      expect(
+        isWithinHoursWindow(created, new Date(created.getTime() + 24 * HOUR), 24),
+      ).toBe(true);
+      // 24 jam + 1 ms → sudah lewat
+      expect(
+        isWithinHoursWindow(
+          created,
+          new Date(created.getTime() + 24 * HOUR + 1),
+          24,
+        ),
+      ).toBe(false);
+      // 1 jam sebelum transaksi dibuat (waktu server mundur) → bukan window valid
+      expect(
+        isWithinHoursWindow(created, new Date(created.getTime() - HOUR), 24),
+      ).toBe(false);
+    });
+
     it('AC-08: BR-13 - Void transaksi hari ini berhasil', async () => {
       // Create new transaction
       const transaction = await transactionService.createTransaction(
@@ -452,6 +476,59 @@ describe('Transaction Service', () => {
         select: { stok: true },
       });
       expect(stokAfterVoid!.stok).toBe(stokBeforeVoid!.stok + 1);
+    });
+
+    it('AC-08: BR-13 - Void transaksi lebih dari 24 jam ditolak (VoidWindowExpiredError)', async () => {
+      const transaction = await transactionService.createTransaction(
+        {
+          uangDiterima: 10000,
+          items: [{ productId: testProductId, jumlah: 1 }],
+        },
+        testUserId,
+      );
+
+      // Mundurkan createdAt 25 jam → melewati window 24 jam
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
+      });
+
+      await expect(
+        transactionService.voidTransaction(transaction.id),
+      ).rejects.toThrow(VoidWindowExpiredError);
+
+      // Pastikan transaksi tidak berubah status
+      const unchanged = await prisma.transaction.findUnique({
+        where: { id: transaction.id },
+        select: { statusTransaksi: true },
+      });
+      expect(unchanged!.statusTransaksi).toBe(TransactionStatus.AKTIF);
+
+      // Cleanup transaksi uji agar tidak mengganggu assertion lain
+      await prisma.detailTransaction.deleteMany({
+        where: { transactionId: transaction.id },
+      });
+      await prisma.transaction.delete({ where: { id: transaction.id } });
+    });
+
+    it('FR-25 + AC-08: Transaksi 23 jam lalu masih dapat di-void (rolling window, bukan hari kalender)', async () => {
+      const transaction = await transactionService.createTransaction(
+        {
+          uangDiterima: 10000,
+          items: [{ productId: testProductId, jumlah: 1 }],
+        },
+        testUserId,
+      );
+
+      // 23 jam lalu: sudah beda hari kalender bila dibuat dekat tengah malam,
+      // tetapi masih di dalam window 24 jam sehingga harus tetap bisa di-void.
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: { createdAt: new Date(Date.now() - 23 * 60 * 60 * 1000) },
+      });
+
+      const voided = await transactionService.voidTransaction(transaction.id);
+      expect(voided.statusTransaksi).toBe(TransactionStatus.DIBATALKAN);
     });
 
     it('AC-08: Void transaksi yang sudah dibatalkan harus ditolak', async () => {
@@ -499,7 +576,7 @@ describe('Transaction Service', () => {
       ).rejects.toThrow(BusinessRuleError);
     });
 
-    it('FR-20 + AC-08: UTANG dengan uang muka (tanpa cicilan) masih bisa di-void hari yang sama', async () => {
+    it('FR-20 + AC-08: UTANG dengan uang muka (tanpa cicilan) masih bisa di-void dalam window 24 jam', async () => {
       // Opsi A: uang muka disimpan pada Transaction, bukan PaymentHistory,
       // sehingga aturan BR-13 "sudah ada cicilan" tidak memblokir void.
       const transaction = await transactionService.createTransaction(

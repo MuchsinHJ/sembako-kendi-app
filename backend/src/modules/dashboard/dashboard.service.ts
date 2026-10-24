@@ -16,6 +16,7 @@ import {
   getEndOfMonthJakarta,
 } from "../../utils/date.js";
 import { decimalToString } from "../../utils/money.js";
+import { getTotalKewajibanPenitip } from "../consignment/consignment.service.js";
 import type { DashboardSummaryQuery } from "./dashboard.schema.js";
 
 interface PeriodSummary {
@@ -37,6 +38,11 @@ interface DashboardSummaryData {
   bulanBerjalan: PeriodSummary;
   produkLowStock: LowStockProduct[];
   totalSaldoUtang: string;
+  /**
+   * Tahap 2 konsinyasi: jumlah saldo POSITIF seluruh penitip (termasuk yang
+   * NONAKTIF) — kewajiban toko yang belum disetor.
+   */
+  totalKewajibanPenitip: string;
 }
 
 /**
@@ -99,11 +105,15 @@ export async function getDashboardSummary(
     },
   });
 
+  // ─── 5. Total kewajiban ke penitip (konsinyasi Tahap 2) ───────────────────────
+  const totalKewajibanPenitip = await getTotalKewajibanPenitip();
+
   return {
     hariIni,
     bulanBerjalan,
     produkLowStock,
     totalSaldoUtang: decimalToString(utangAggregate._sum.sisaSaldoUtang) ?? "0.00",
+    totalKewajibanPenitip,
   };
 }
 

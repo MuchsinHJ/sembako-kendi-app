@@ -128,3 +128,64 @@ export class ProductHasTransactionError extends BusinessRuleError {
     super(message);
   }
 }
+
+// ─── Business Rule Specific Errors — Konsinyasi (BR-A…BR-J) ───────────────────
+
+/**
+ * BR-I: Operasi konsinyasi (receipt/retur) hanya untuk produk bertipe TITIPAN.
+ */
+export class ProductNotConsignmentError extends BusinessRuleError {
+  constructor(
+    message: string = 'Produk ini bukan produk titipan, sehingga tidak memiliki alur konsinyasi.',
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * BR-G: Consignor NONAKTIF tidak boleh dipakai untuk membuat produk titipan
+ * baru, menerima titipan, atau mengaktifkan produknya.
+ */
+export class ConsignorInactiveError extends BusinessRuleError {
+  constructor(
+    message: string = 'Penitip berstatus NONAKTIF sehingga operasi ini tidak diizinkan.',
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * BR-E: Consignor hanya dapat dinonaktifkan jika seluruh produk titipannya
+ * berstok 0. `details` berisi daftar produk yang masih berstok.
+ */
+export class ConsignorHasStockError extends BusinessRuleError {
+  constructor(
+    message: string = 'Penitip masih memiliki produk titipan yang berstok, sehingga tidak dapat dinonaktifkan.',
+    details?: unknown,
+  ) {
+    super(message, details);
+  }
+}
+
+/**
+ * BR-H: Produk TITIPAN hanya dapat dinonaktifkan jika stok = 0, dan hanya
+ * dapat diaktifkan kembali jika penitipnya AKTIF.
+ */
+export class ProductHasStockError extends BusinessRuleError {
+  constructor(
+    message: string = 'Produk titipan masih memiliki stok, sehingga tidak dapat dinonaktifkan.',
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * BR-D: Setoran ke penitip tidak boleh melebihi saldo kewajiban saat ini.
+ */
+export class ConsignorOverpaymentError extends BusinessRuleError {
+  constructor(
+    message: string = 'Jumlah setoran melebihi saldo kewajiban ke penitip.',
+  ) {
+    super(message);
+  }
+}

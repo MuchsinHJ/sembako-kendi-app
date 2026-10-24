@@ -4,13 +4,16 @@
  */
 
 import { z } from 'zod';
-import { ProductStatus } from '@prisma/client';
+import { ProductStatus, ProductType } from '@prisma/client';
 
 // ─── GET /products (list) ─────────────────────────────────────────────────────
 export const listProductsSchema = {
   query: z.object({
     kategori: z.string().optional(),
     status: z.nativeEnum(ProductStatus).optional(),
+    // Filter konsinyasi (Tahap 1)
+    tipe: z.nativeEnum(ProductType).optional(),
+    consignorId: z.string().uuid('ID penitip harus berformat UUID').optional(),
     search: z.string().optional(),
     page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)).pipe(z.number().int().positive()),
     limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)).pipe(z.number().int().positive().max(100)),
@@ -26,14 +29,32 @@ export const getProductSchema = {
 
 // ─── POST /products (create) ──────────────────────────────────────────────────
 export const createProductSchema = {
-  body: z.object({
-    nama: z.string().min(1, 'Nama produk wajib diisi').max(255),
-    kategori: z.string().min(1, 'Kategori wajib diisi').max(100),
-    hargaJual: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Harga jual harus format desimal valid'),
-    hargaModal: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Harga modal harus format desimal valid'),
-    stok: z.number().int().min(0, 'Stok tidak boleh negatif').default(0),
-    stokMinimum: z.number().int().min(0, 'Stok minimum tidak boleh negatif').default(0),
-  }),
+  body: z
+    .object({
+      nama: z.string().min(1, 'Nama produk wajib diisi').max(255),
+      kategori: z.string().min(1, 'Kategori wajib diisi').max(100),
+      hargaJual: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Harga jual harus format desimal valid'),
+      hargaModal: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Harga modal harus format desimal valid'),
+      stok: z.number().int().min(0, 'Stok tidak boleh negatif').default(0),
+      stokMinimum: z.number().int().min(0, 'Stok minimum tidak boleh negatif').default(0),
+      // BR-A: default MILIK_SENDIRI agar kompatibel dengan klien lama.
+      tipe: z.nativeEnum(ProductType).default(ProductType.MILIK_SENDIRI),
+      consignorId: z.string().uuid('ID penitip harus berformat UUID').nullable().optional(),
+    })
+    .refine(
+      (data) => data.tipe !== ProductType.TITIPAN || !!data.consignorId,
+      {
+        message: 'Produk titipan wajib memiliki consignorId (BR-A).',
+        path: ['consignorId'],
+      },
+    )
+    .refine(
+      (data) => data.tipe !== ProductType.MILIK_SENDIRI || !data.consignorId,
+      {
+        message: 'Produk milik sendiri tidak boleh memiliki consignorId (BR-A).',
+        path: ['consignorId'],
+      },
+    ),
 };
 
 // ─── PUT /products/:id (update) ───────────────────────────────────────────────
@@ -47,7 +68,10 @@ export const updateProductSchema = {
     hargaJual: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
     hargaModal: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
     stokMinimum: z.number().int().min(0).optional(),
-    // stok TIDAK ADA di sini - hanya berubah lewat transaksi/adjustment
+    // stok TIDAK ADA di sini - hanya berubah lewat transaksi/adjustment.
+    // BR-A: tipe & consignorId immutable — ditolak di service bila dikirim.
+    tipe: z.nativeEnum(ProductType).optional(),
+    consignorId: z.string().uuid().nullable().optional(),
   }),
 };
 
