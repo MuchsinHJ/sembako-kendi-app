@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { apiFetch, ApiError, setAccessToken } from './http';
 import { http, HttpResponse } from 'msw';
-import { server } from '../../test/msw/server';
+import { server } from '../test/msw/server';
 
 describe('apiFetch', () => {
   it('sukses: kembalikan data dari envelope', async () => {
