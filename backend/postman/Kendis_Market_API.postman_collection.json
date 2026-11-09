@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "kendi-market-api-v1",
     "name": "Kendi's Market API",
-    "description": "Complete API collection for Kendi's Market Backend - MVP Phase\n\nBase URL: {{base_url}}/api/v1\nAuthentication: Bearer Token (JWT)\n\nDerived from: SDD Backend Kendi's Market v1.0",
+    "description": "Complete API collection for Kendi's Market Backend - MVP (termasuk Fitur Penitipan Barang / Konsinyasi).\n\nBase URL: {{base_url}}/api/v1\nAuthentication: Bearer Token (JWT)\nJumlah request: 45 — Health 1, Auth 3, Consignor 8, Product 12, Consignment 3, Transaction 6, Debt 3, Dashboard 1, Report 8.\n\nDerived from: SDD Backend Kendi's Market v1.1 (SRS v1.1, PRD Revisi 4)\nModul konsinyasi: FR-46–FR-49, BR-17–BR-26, AC-20–AC-26",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -136,6 +136,276 @@
       "description": "Authentication endpoints - Login, Refresh Token, Logout"
     },
     {
+      "name": "Consignor",
+      "item": [
+        {
+          "name": "Get All Consignors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors?page=1&limit=20&status=AKTIF",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Items per page (max 100)"
+                },
+                {
+                  "key": "status",
+                  "value": "AKTIF",
+                  "description": "AKTIF atau NONAKTIF (opsional). Kosongkan (disable) untuk semua status."
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Cari berdasarkan nama penitip (opsional)"
+                },
+                {
+                  "key": "punyaSaldo",
+                  "value": "true",
+                  "disabled": true,
+                  "description": "true = hanya penitip dengan saldo != 0 (termasuk NONAKTIF); false = saldo = 0. Hanya menerima 'true'/'false' — jangan dikirim kosong."
+                }
+              ]
+            },
+            "description": "Daftar penitip dengan filter status, pencarian nama, dan kepemilikan saldo.\n\n`punyaSaldo=true` dipakai agar penitip NONAKTIF yang masih punya kewajiban tidak \"hilang\".\n\nCatatan: `punyaSaldo` hanya menerima `true`/`false`; nilai kosong akan ditolak 400 `VALIDATION_ERROR`.\n\nReferensi: FR-46, AC-20"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Consignor by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{consignor_id}}",
+                  "description": "Consignor UUID"
+                }
+              ]
+            },
+            "description": "Detail penitip beserta `ringkasan`:\n- `jumlahProdukTitipanAktif`\n- `totalStokTitipan` (semua produk titipan, apa pun statusnya)\n\nReferensi: FR-46, AC-20"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Consignor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.environment.set('consignor_id', jsonData.data.id);",
+                  "        console.log('Consignor ID saved:', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nama\": \"Pak Budi\",\n  \"noHp\": \"081298765432\",\n  \"catatan\": \"Penitip kerupuk & snack\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors"]
+            },
+            "description": "Tambah penitip baru. Status awal selalu AKTIF.\n\nPenitip adalah data referensi — tidak punya akun/login ke sistem.\n\nReferensi: FR-46, AC-20"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Consignor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nama\": \"Pak Budi Santoso\",\n  \"noHp\": \"081298765432\",\n  \"catatan\": \"Penitip kerupuk & snack\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{consignor_id}}",
+                  "description": "Consignor UUID"
+                }
+              ]
+            },
+            "description": "Ubah data penitip (nama, noHp, catatan).\n\nCatatan: perubahan tidak memengaruhi saldo kewajiban maupun riwayat pergerakan.\n\nReferensi: FR-46"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Consignor Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"NONAKTIF\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors/:id/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors", ":id", "status"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{consignor_id}}",
+                  "description": "Consignor UUID"
+                }
+              ]
+            },
+            "description": "Mengaktifkan / menonaktifkan penitip.\n\nValidasi:\n- NONAKTIF ditolak bila masih ada produk titipan berstok > 0 (`CONSIGNOR_HAS_STOCK`, BR-19/BR-E)\n- Produk titipan berstok 0 ikut dinonaktifkan dalam transaction yang sama\n- Mengaktifkan kembali selalu diizinkan; produk TIDAK ikut aktif otomatis\n- Saldo kewajiban tidak dipersyaratkan 0\n\nReferensi: FR-46, BR-19, AC-22"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Consignor Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors/:id/balance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors", ":id", "balance"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{consignor_id}}",
+                  "description": "Consignor UUID"
+                }
+              ]
+            },
+            "description": "Saldo kewajiban toko ke penitip (all-time, derived — tidak disimpan).\n\nRumus:\n  saldo = SUM(d.jumlah x d.hargaModalSnapshot)  [transaksi AKTIF]\n        - SUM(ConsignorPayment.jumlahBayar)\n\nNilai dikirim sebagai string 2 desimal. Saldo negatif ditampilkan apa adanya (artinya penitip kelebihan menerima setoran, BR-23).\n\nReferensi: FR-48, BR-21, AC-24"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Consignor Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors/:id/payments?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors", ":id", "payments"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{consignor_id}}",
+                  "description": "Consignor UUID"
+                }
+              ]
+            },
+            "description": "Riwayat setoran ke penitip (append-only, urut terbaru).\n\nSetiap baris memuat `jumlahBayar` dan `saldoSetelahBayar` sebagai string.\n\nReferensi: FR-48, BR-22, AC-25"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Consignor Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data) {",
+                  "        pm.environment.set('consignor_payment_id', jsonData.data.id);",
+                  "        pm.environment.set('consignor_saldo_setelah', jsonData.data.saldoSetelahBayar);",
+                  "        console.log('Setoran dicatat. Saldo setelah bayar:', jsonData.data.saldoSetelahBayar);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jumlahBayar\": 50000,\n  \"catatan\": \"Setoran tunai periode Oktober\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignors/:id/payments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignors", ":id", "payments"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{consignor_id}}",
+                  "description": "Consignor UUID"
+                }
+              ]
+            },
+            "description": "Mencatat setoran ke penitip.\n\nValidasi:\n- jumlahBayar > 0, maksimal 2 angka desimal\n- tidak boleh melebihi saldo kewajiban saat ini (`CONSIGNOR_OVERPAYMENT`, BR-23)\n- saldo <= 0 -> setoran apa pun ditolak\n- saldo dihitung ULANG di dalam transaction dengan row lock, sehingga setoran paralel tidak bisa membuat saldo negatif\n- tetap diizinkan untuk penitip NONAKTIF\n\nReferensi: FR-48, BR-22, BR-23, AC-25"
+          },
+          "response": []
+        }
+      ],
+      "description": "Penitip (consignor) — data referensi tanpa akun, saldo kewajiban derived, dan setoran append-only"
+    },
+    {
       "name": "Product",
       "item": [
         {
@@ -144,7 +414,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/v1/products?page=1&limit=20&kategori=&status=AKTIF&search=",
+              "raw": "{{base_url}}/api/v1/products?page=1&limit=20&status=AKTIF",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "products"],
               "query": [
@@ -156,26 +426,40 @@
                 {
                   "key": "limit",
                   "value": "20",
-                  "description": "Items per page"
+                  "description": "Items per page (max 100)"
                 },
                 {
                   "key": "kategori",
-                  "value": "",
-                  "description": "Filter by category"
+                  "value": "Beras",
+                  "disabled": true,
+                  "description": "Filter by category (opsional)"
                 },
                 {
                   "key": "status",
                   "value": "AKTIF",
-                  "description": "AKTIF or NONAKTIF"
+                  "description": "AKTIF or NONAKTIF (opsional; disable untuk semua)"
                 },
                 {
                   "key": "search",
-                  "value": "",
-                  "description": "Search by product name"
+                  "value": "beras",
+                  "disabled": true,
+                  "description": "Search by product name (opsional)"
+                },
+                {
+                  "key": "tipe",
+                  "value": "TITIPAN",
+                  "disabled": true,
+                  "description": "MILIK_SENDIRI atau TITIPAN. Jangan dikirim kosong."
+                },
+                {
+                  "key": "consignorId",
+                  "value": "{{consignor_id}}",
+                  "disabled": true,
+                  "description": "UUID penitip (harus UUID valid). Jangan dikirim kosong."
                 }
               ]
             },
-            "description": "List produk dengan filter kategori, status, dan pencarian nama\n\nReferensi: FR-06"
+            "description": "List produk dengan filter kategori, status, pencarian nama, serta tipe/penitip (konsinyasi).\n\nCatatan: `tipe` dan `consignorId` harus berupa nilai valid — mengirim string kosong akan ditolak 400 `VALIDATION_ERROR`.\n\nReferensi: FR-06, FR-46"
           },
           "response": []
         },
@@ -229,14 +513,54 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nama\": \"Beras Premium 5kg\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": \"75000\",\n  \"hargaModal\": \"65000\",\n  \"stok\": 50,\n  \"stokMinimum\": 10\n}"
+              "raw": "{\n  \"nama\": \"Beras Premium 5kg\",\n  \"kategori\": \"Beras\",\n  \"hargaJual\": \"75000\",\n  \"hargaModal\": \"65000\",\n  \"stok\": 50,\n  \"stokMinimum\": 10,\n  \"tipe\": \"MILIK_SENDIRI\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/products",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "products"]
             },
-            "description": "Tambah produk baru (tanpa foto; foto diunggah terpisah)\n\nValidasi:\n- hargaJual > 0 (BR-03)\n- stok >= 0 (BR-04)\n\nReferensi: FR-07, FR-08"
+            "description": "Tambah produk baru milik toko (tanpa foto; foto diunggah terpisah).\n\nValidasi:\n- hargaJual > 0 (BR-03)\n- stok >= 0 (BR-04)\n- `tipe` default MILIK_SENDIRI; bila MILIK_SENDIRI maka `consignorId` harus null/kosong (BR-17 / BR-A)\n\nUntuk produk titipan, gunakan request **Create Consignment Product**.\n\nReferensi: FR-07, FR-08, BR-17"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Consignment Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.environment.set('consignment_product_id', jsonData.data.id);",
+                  "        console.log('Consignment product ID saved:', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nama\": \"Kerupuk Udang Mentah\",\n  \"kategori\": \"Snack\",\n  \"hargaJual\": \"15000\",\n  \"hargaModal\": \"10000\",\n  \"stok\": 0,\n  \"stokMinimum\": 5,\n  \"tipe\": \"TITIPAN\",\n  \"consignorId\": \"{{consignor_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "products"]
+            },
+            "description": "Tambah produk titipan (konsinyasi).\n\nValidasi:\n- `tipe` TITIPAN wajib punya `consignorId` (BR-17 / BR-A)\n- `consignorId` harus penitip berstatus AKTIF (BR-20 / BR-G)\n- `hargaJual` >= `hargaModal` — `hargaModal` = harga setor ke penitip (BR-18 / BR-B)\n- Stok awal 0; stok bertambah lewat penerimaan titipan (`POST /consignment/receipts`)\n\n`tipe` dan `consignorId` immutable setelah dibuat.\n\nReferensi: FR-46, BR-17, BR-18, BR-20, AC-20, AC-21"
           },
           "response": []
         },
@@ -266,7 +590,7 @@
                 }
               ]
             },
-            "description": "Ubah data produk (tidak memengaruhi transaksi lama karena snapshot)\n\nReferensi: FR-09, FR-10, BR-10"
+            "description": "Ubah data produk (tidak memengaruhi transaksi lama karena snapshot).\n\nCatatan konsinyasi:\n- `tipe` dan `consignorId` bersifat **immutable** — dikirim dengan nilai berbeda akan ditolak (BR-17 / BR-A)\n- Untuk produk TITIPAN, `hargaJual` tidak boleh turun di bawah `hargaModal` (harga setor) (BR-18 / BR-B)\n\nReferensi: FR-09, FR-10, BR-10, BR-17, BR-18"
           },
           "response": []
         },
@@ -287,7 +611,7 @@
                 }
               ]
             },
-            "description": "Hard delete jika belum ada riwayat transaksi (turut menghapus foto di R2)\nJika sudah ada transaksi, akan ditolak dengan error PRODUCT_HAS_TRANSACTION\n\nReferensi: FR-11, FR-12, BR-12"
+            "description": "Hard delete jika belum ada riwayat transaksi maupun pergerakan titipan (turut menghapus foto di R2).\n\nDitolak dengan error `PRODUCT_HAS_TRANSACTION` bila:\n- sudah dipakai di transaksi (BR-12), atau\n- produk TITIPAN sudah punya riwayat penerimaan/retur (BR-24 / BR-J)\n\nUntuk produk yang masih berstok, gunakan retur/nonaktifkan terlebih dahulu.\n\nReferensi: FR-11, FR-12, BR-12, BR-24"
           },
           "response": []
         },
@@ -317,7 +641,7 @@
                 }
               ]
             },
-            "description": "Mengubah status produk AKTIF/NONAKTIF (soft delete)\n\nReferensi: FR-12"
+            "description": "Mengubah status produk AKTIF/NONAKTIF (soft delete).\n\nAturan tambahan untuk produk TITIPAN (BR-25 / BR-H):\n- NONAKTIF hanya bila stok = 0 (`PRODUCT_HAS_STOCK`)\n- AKTIF kembali hanya bila penitip berstatus AKTIF (`CONSIGNOR_INACTIVE`)\n\nReferensi: FR-12, BR-25"
           },
           "response": []
         },
@@ -391,7 +715,7 @@
                 }
               ]
             },
-            "description": "Penyesuaian stok manual dengan alasan (untuk audit)\ndelta: bilangan bulat != 0; positif untuk tambah, negatif untuk kurangi\nalasan: wajib, dicatat di tabel StockAdjustment\n\nReferensi: BR-04, FR-15"
+            "description": "Penyesuaian stok manual dengan alasan (untuk audit).\ndelta: bilangan bulat != 0; positif untuk tambah, negatif untuk kurangi\nalasan: wajib, dicatat di tabel StockAdjustment\n\nValidasi:\n- hasil penyesuaian tidak boleh membuat stok negatif (422 `BUSINESS_RULE_VIOLATION`, BR-04)\n- `alasan` kosong ditolak 400 `VALIDATION_ERROR`\n\nBerlaku juga untuk produk TITIPAN; koreksi stok ini TIDAK membuat movement konsinyasi.\n\nReferensi: BR-04, FR-15, AC-19"
           },
           "response": []
         },
@@ -423,7 +747,7 @@
                 }
               ]
             },
-            "description": "Upload/ganti foto produk\nFile diproses: Multer → Sharp (resize/compress/convert to WebP) → Cloudflare R2\n\nValidasi:\n- Tipe file: image/jpeg, image/png, image/webp\n- Ukuran max: 5MB (default)\n\nReferensi: Perluasan FR-07/FR-09"
+            "description": "Upload/ganti foto produk\nFile diproses: Multer → Sharp (resize/compress/convert to WebP) → Cloudflare R2\n\nValidasi:\n- Tipe file: image/jpeg, image/png, image/webp — selain itu 415 `INVALID_FILE_TYPE`\n- Isi berkas harus gambar valid — berkas corrupt ditolak 400 setelah Sharp gagal decode\n- Ukuran max: 5MB (default, env `MAX_UPLOAD_SIZE_MB`)\n- Rate limit: 10 upload/menit per user\n\nReferensi: FR-07, FR-09, AC-18"
           },
           "response": []
         },
@@ -444,12 +768,136 @@
                 }
               ]
             },
-            "description": "Menghapus foto produk (object di R2 + kosongkan fotoKey/fotoUrl)\n\nReferensi: Perluasan FR-09"
+            "description": "Menghapus foto produk (object di R2 + kosongkan fotoKey/fotoUrl)\n\nReferensi: FR-09, AC-18"
           },
           "response": []
         }
       ],
-      "description": "Product management endpoints - CRUD, stock, photo upload"
+      "description": "Product management endpoints - CRUD, stock, photo upload, produk titipan"
+    },
+    {
+      "name": "Consignment",
+      "item": [
+        {
+          "name": "Create Receipt (Terima Titipan)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.environment.set('movement_id', jsonData.data.id);",
+                  "        console.log('Movement ID saved:', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{consignment_product_id}}\",\n  \"jumlah\": 20,\n  \"catatan\": \"Kiriman awal dari Pak Budi\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignment/receipts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignment", "receipts"]
+            },
+            "description": "Mencatat penerimaan barang titipan (MENAMBAH stok).\n\nValidasi (BR-I):\n- produk harus TITIPAN (`PRODUCT_NOT_CONSIGNMENT`)\n- produk harus AKTIF\n- penitip harus AKTIF (`CONSIGNOR_INACTIVE`)\n\n`consignorId` pada movement diambil dari produk, bukan dari input. Mencatat stokSebelum & stokSesudah, dan mengunci baris produk (`FOR UPDATE`) di dalam transaction.\n\nReferensi: FR-47, BR-21, AC-24"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Return (Retur ke Penitip)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{consignment_product_id}}\",\n  \"jumlah\": 5,\n  \"catatan\": \"Sisa tidak laku dikembalikan\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignment/returns",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignment", "returns"]
+            },
+            "description": "Mencatat retur barang titipan ke penitip (MENGURANGI stok).\n\nValidasi (BR-C):\n- produk harus TITIPAN (`PRODUCT_NOT_CONSIGNMENT`)\n- jumlah retur tidak boleh melebihi stok saat ini (422 `BUSINESS_RULE_VIOLATION`)\n\nStatus produk/penitip tidak dipersyaratkan AKTIF — retur justru dipakai untuk mengosongkan stok sebelum dinonaktifkan.\n\nReferensi: FR-47, BR-20, AC-23"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Movements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/consignment/movements?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "consignment", "movements"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "max 100"
+                },
+                {
+                  "key": "consignorId",
+                  "value": "{{consignor_id}}",
+                  "disabled": true,
+                  "description": "Filter UUID penitip (harus UUID valid)"
+                },
+                {
+                  "key": "productId",
+                  "value": "{{consignment_product_id}}",
+                  "disabled": true,
+                  "description": "Filter UUID produk (harus UUID valid)"
+                },
+                {
+                  "key": "tipe",
+                  "value": "TERIMA",
+                  "disabled": true,
+                  "description": "TERIMA atau RETUR. Jangan dikirim kosong."
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01",
+                  "disabled": true,
+                  "description": "ISO date (opsional)"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-31",
+                  "disabled": true,
+                  "description": "ISO date (opsional)"
+                }
+              ]
+            },
+            "description": "Riwayat pergerakan stok titipan (append-only, urut terbaru).\n\nSetiap baris memuat `tipe` (TERIMA/RETUR), `jumlah`, `stokSebelum`, `stokSesudah`, relasi produk, penitip, dan user pencatat.\n\nCatatan: filter `consignorId`/`productId` harus UUID valid dan `tipe` harus TERIMA/RETUR — nilai kosong ditolak 400.\n\nReferensi: FR-47, BR-21, AC-24"
+          },
+          "response": []
+        }
+      ],
+      "description": "Penerimaan, retur, dan riwayat pergerakan stok titipan (append-only)"
     },
     {
       "name": "Transaction",
@@ -460,7 +908,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/v1/transactions?page=1&limit=20&statusTransaksi=AKTIF&statusPembayaran=&startDate=&endDate=",
+              "raw": "{{base_url}}/api/v1/transactions?page=1&limit=20&statusTransaksi=AKTIF",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "transactions"],
               "query": [
@@ -475,26 +923,29 @@
                 {
                   "key": "statusTransaksi",
                   "value": "AKTIF",
-                  "description": "AKTIF or DIBATALKAN"
+                  "description": "AKTIF or DIBATALKAN (opsional; disable untuk semua)"
                 },
                 {
                   "key": "statusPembayaran",
-                  "value": "",
-                  "description": "LUNAS or UTANG"
+                  "value": "UTANG",
+                  "disabled": true,
+                  "description": "LUNAS or UTANG. Jangan dikirim kosong."
                 },
                 {
                   "key": "startDate",
-                  "value": "",
-                  "description": "ISO date format"
+                  "value": "2026-10-01",
+                  "disabled": true,
+                  "description": "ISO date format (opsional)"
                 },
                 {
                   "key": "endDate",
-                  "value": "",
-                  "description": "ISO date format"
+                  "value": "2026-10-31",
+                  "disabled": true,
+                  "description": "ISO date format (opsional)"
                 }
               ]
             },
-            "description": "List riwayat transaksi dengan filter periode dan status\n\nReferensi: FR-24"
+            "description": "List riwayat transaksi dengan filter periode dan status\n\nCatatan: `statusPembayaran` hanya menerima LUNAS/UTANG dan tanggal harus ISO 8601 valid — nilai kosong ditolak 400.\n\nReferensi: FR-24"
           },
           "response": []
         },
@@ -548,14 +999,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"uangDiterima\": 20000,\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 2\n    }\n  ]\n}"
+              "raw": "{\n  \"uangDiterima\": 200000,\n  \"items\": [\n    {\n      \"productId\": \"{{product_id}}\",\n      \"jumlah\": 2\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/transactions",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "transactions"]
             },
-            "description": "Membuat transaksi LUNAS\n\nValidasi:\n- uangDiterima >= total -> LUNAS, kembalian = uangDiterima - total (FR-20)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- Otomatis menghitung total (BR-07)\n- Snapshot harga produk (BR-10)\n- Update stok (BR-09, BR-04)\n\nReferensi: FR-16–FR-23"
+            "description": "Membuat transaksi LUNAS (produk milik toko).\n\nContoh: 2 x Rp75.000 = Rp150.000, uangDiterima Rp200.000 -> LUNAS, kembalian Rp50.000. **Sesuaikan `uangDiterima` dengan harga produk yang dipakai.**\n\nValidasi:\n- uangDiterima >= total -> LUNAS, kembalian = uangDiterima - total (FR-20)\n- uangDiterima < total -> UTANG, sehingga `namaPembeli` jadi wajib (BR-08)\n- jumlah > 0 (BR-05)\n- stok mencukupi (BR-05)\n- Otomatis menghitung total (BR-07)\n- Snapshot harga produk (BR-10)\n- Update stok (BR-09, BR-04)\n\nReferensi: FR-16–FR-23"
           },
           "response": []
         },
@@ -600,6 +1051,46 @@
           "response": []
         },
         {
+          "name": "Create Transaction (Titipan)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.id) {",
+                  "        pm.environment.set('transaction_id', jsonData.data.id);",
+                  "        console.log('Transaction ID saved:', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uangDiterima\": 50000,\n  \"items\": [\n    {\n      \"productId\": \"{{consignment_product_id}}\",\n      \"jumlah\": 2\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "transactions"]
+            },
+            "description": "Menjual produk TITIPAN — inilah yang memunculkan kewajiban ke penitip.\n\nContoh: 2 x Rp15.000 = Rp30.000 (uangDiterima Rp50.000 -> LUNAS, kembalian Rp20.000).\n\nSetelah request ini berhasil, `GET /consignors/:id/balance` akan menunjukkan:\n  totalTerjualModal = 2 x hargaModal (harga setor) = Rp20.000\n  saldo             = Rp20.000 (belum ada setoran)\n\nKewajiban timbul **saat barang terjual**, tanpa memandang status LUNAS/UTANG maupun status produk/penitip (BR-21).\n\nCatatan: jalankan **Create Receipt** terlebih dahulu agar stok mencukupi.\n\nReferensi: FR-47, FR-48, BR-21, AC-24, AC-26"
+          },
+          "response": []
+        },
+        {
           "name": "Void Transaction",
           "request": {
             "method": "POST",
@@ -616,12 +1107,12 @@
                 }
               ]
             },
-            "description": "Membatalkan transaksi dalam batas waktu yang ditentukan\n\nValidasi:\n- Hanya transaksi AKTIF yang bisa di-void\n- Dalam batas waktu yang ditentukan (BR-13)\n- Transaksi Utang hanya bisa di-void jika belum ada pembayaran\n- Stok dikembalikan (BR-09)\n\nReferensi: FR-25–FR-29, BR-13"
+            "description": "Membatalkan transaksi.\n\nValidasi:\n- Hanya transaksi AKTIF yang bisa di-void\n- Dalam **24 jam** sejak transaksi dibuat (rolling window, BR-13) — lewat dari itu 422 `BUSINESS_RULE_VIOLATION`\n- Transaksi Utang hanya bisa di-void jika belum ada pembayaran\n- Stok dikembalikan (BR-09)\n\nCatatan konsinyasi (BR-23): void boleh membuat saldo penitip menjadi NEGATIF — tidak diblokir, ditampilkan apa adanya.\n\nReferensi: FR-25–FR-29, BR-13, BR-23, AC-07, AC-08"
           },
           "response": []
         }
       ],
-      "description": "Transaction management - Create (Lunas/Utang), View, Void"
+      "description": "Transaction management - Create (Lunas/Utang/Titipan), View, Void"
     },
     {
       "name": "Debt",
@@ -717,7 +1208,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "dashboard", "summary"]
             },
-            "description": "Ringkasan dashboard:\n- Omzet & profit periode berjalan\n- Produk low-stock count\n- Total saldo utang aktif\n\nReferensi: FR-43–FR-45"
+            "description": "Ringkasan dashboard:\n- `hariIni` & `bulanBerjalan`: omzet, profit, transactionCount\n- `produkLowStock`: maksimal 20 produk (stok <= stokMinimum)\n- `totalSaldoUtang`: total sisa utang pembeli\n- `totalKewajibanPenitip`: jumlah saldo POSITIF seluruh penitip (termasuk NONAKTIF) — kewajiban toko yang belum disetor\n\nSemua nilai uang berupa string 2 desimal.\n\nReferensi: FR-43–FR-45, FR-49, AC-17, AC-26"
           },
           "response": []
         }
@@ -802,6 +1293,32 @@
               ]
             },
             "description": "Tren produk terlaris per periode\n\nReferensi: FR-38"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Consignment Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/consignment?startDate=2026-10-01&endDate=2026-10-31",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "consignment"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01",
+                  "description": "Wajib. ISO date format"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-31",
+                  "description": "Wajib. ISO date format; harus >= startDate"
+                }
+              ]
+            },
+            "description": "Laporan konsinyasi per penitip dalam periode.\n\nField per penitip:\n- `terjualPeriode` = omzet penjualan barang titipan (transaksi AKTIF)\n- `modalPeriode` = kewajiban yang timbul di periode (jumlah x harga setor)\n- `disetorPeriode` = setoran yang dicatat di periode\n- `saldoAkhir` = saldo all-time (sama dengan `GET /consignors/:id/balance`)\n\nSemua penitip ditampilkan (termasuk NONAKTIF) agar saldo tidak \"hilang\". Respons juga memuat total periode.\n\nReferensi: FR-49, BR-26, AC-26"
           },
           "response": []
         },
@@ -922,7 +1439,7 @@
           "response": []
         }
       ],
-      "description": "Report endpoints - Sales, Debt, Product Trend, Export to Excel/PDF"
+      "description": "Report endpoints - Sales, Debt, Product Trend, Consignment, Export to Excel/PDF"
     }
   ],
   "variable": [
