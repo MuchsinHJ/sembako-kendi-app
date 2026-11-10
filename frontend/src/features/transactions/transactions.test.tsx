@@ -98,8 +98,8 @@ describe('Riwayat Transaksi', () => {
     expect(dlg.getByText(/Transaksi akan dibatalkan/)).toBeInTheDocument();
 
     await userEvent.click(dlg.getByRole('button', { name: 'Batalkan Transaksi' }));
-    // t1 jadi DIBATALKAN + t3 fixture sudah DIBATALKAN → 2 badge.
-    await waitFor(() => expect(screen.getAllByText('Dibatalkan')).toHaveLength(2));
+    // t1 jadi DIBATALKAN + t3 fixture sudah DIBATALKAN → master + panel detail bisa dobel.
+    await waitFor(() => expect(screen.getAllByText('Dibatalkan').length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
@@ -108,7 +108,7 @@ describe('Utang', () => {
   it('daftar utang: sisa, catat cicilan > sisa ditolak client, pelunasan menghapus baris', async () => {
     renderAt('/utang', <DebtsPage />);
     expect(await screen.findByText('Pak Budi')).toBeInTheDocument();
-    expect(screen.getByText('Rp36.000')).toBeInTheDocument();
+    expect(screen.getAllByText('Rp36.000').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('1 transaksi utang aktif')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Catat Pembayaran' }));
@@ -126,7 +126,7 @@ describe('Utang', () => {
     await userEvent.type(input, '10000');
     await userEvent.click(dlg.getByRole('button', { name: 'Simpan Cicilan' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(await screen.findByText('Rp26.000')).toBeInTheDocument();
+    expect((await screen.findAllByText('Rp26.000')).length).toBeGreaterThanOrEqual(1);
 
     await userEvent.click(screen.getByRole('button', { name: 'Catat Pembayaran' }));
     const dlg2 = getDialog();

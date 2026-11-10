@@ -10,5 +10,6 @@ export const PATHS = {
   consignors: '/penitip',
   consignorDetail: '/penitip/:id',
   reportSales: '/laporan/penjualan',
+  reportDebts: '/laporan/utang',
   reportConsignment: '/laporan/konsinyasi',
 } as const;

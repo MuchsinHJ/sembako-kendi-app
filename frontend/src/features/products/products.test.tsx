@@ -52,8 +52,8 @@ describe('Katalog', () => {
     expect(await screen.findByText('Beras 5kg')).toBeInTheDocument();
     expect(screen.getByText('Gula Pasir 1kg')).toBeInTheDocument();
     expect(screen.getByText('Rp75.000')).toBeInTheDocument();
-    expect(screen.getByText('Stok 12')).toBeInTheDocument();
-    expect(screen.getByText('4 produk')).toBeInTheDocument();
+    expect(screen.getByText('Sisa 12')).toBeInTheDocument();
+    expect(screen.getByText(/4 produk/)).toBeInTheDocument();
   });
 
   it('empty state: "Belum ada produk" + tombol Tambah Produk', async () => {

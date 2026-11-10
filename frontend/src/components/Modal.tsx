@@ -76,7 +76,7 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
         tabIndex={-1}
         className={cn(
           'relative z-10 max-h-[85dvh] w-full overflow-y-auto overscroll-contain',
-          'rounded-t-card bg-surface p-5 focus:outline-none sm:max-w-md sm:rounded-card'
+          'rounded-t-[20px] bg-surface p-5 focus:outline-none sm:max-w-[600px] sm:rounded-[20px]'
         )}
       >
         <div className="mb-4 flex items-start justify-between gap-3">

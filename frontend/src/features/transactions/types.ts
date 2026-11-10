@@ -58,6 +58,8 @@ export interface TransactionFilters {
   endDate?: string;
   statusPembayaran?: PaymentStatus;
   statusTransaksi?: TransactionStatus;
+  /** Limit per halaman — dipakai Beranda untuk "Transaksi terakhir". */
+  limit?: number;
 }
 
 /** Item keranjang POS: produk + jumlah. */

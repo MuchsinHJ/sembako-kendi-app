@@ -27,7 +27,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
-    readonly details?: Array<{ field: string; issue: string }>
+    /** Bentuk `details` bergantung error backend (Zod → daftar field/issue; BR-E → `{ products }`). */
+    readonly details?: unknown
   ) {
     super(message);
     this.name = 'ApiError';

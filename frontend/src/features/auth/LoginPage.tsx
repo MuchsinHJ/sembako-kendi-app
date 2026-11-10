@@ -49,16 +49,34 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-bg px-6">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-card border border-line-soft bg-surface p-6"
-        noValidate
-      >
-        <span className="eyebrow mb-2 block text-xs font-semibold tracking-[1.2px] text-accent">
-          KENDI&apos;S MARKET
-        </span>
-        <h1 className="mb-6 text-2xl font-bold">Masuk ke toko Anda</h1>
+    <main className="flex min-h-dvh bg-bg">
+      {/* Panel kiri brand (06 §5.10) — md+ */}
+      <div className="hidden flex-1 items-center justify-center bg-primary px-10 md:flex">
+        <div className="max-w-sm">
+          <span className="eyebrow block text-xs font-semibold tracking-[1.2px] text-accent-soft">
+            KENDI&apos;S MARKET
+          </span>
+          <h1 className="mt-3 text-3xl font-bold leading-tight text-bg">
+            Kelola toko sembako Anda dalam satu genggaman.
+          </h1>
+          <p className="mt-3 text-sm text-bg/70">
+            Produk, stok, transaksi tunai &amp; utang, hingga konsinyasi — tercatat rapi dan
+            terpusat.
+          </p>
+        </div>
+      </div>
+
+      {/* Panel kanan: form (06 §5.10) */}
+      <div className="flex w-full flex-1 items-center justify-center px-6 py-10">
+        <form
+          onSubmit={onSubmit}
+          className="w-full max-w-sm rounded-card border border-line-soft bg-surface p-6"
+          noValidate
+        >
+          <span className="eyebrow mb-2 block text-xs font-semibold tracking-[1.2px] text-accent md:hidden">
+            KENDI&apos;S MARKET
+          </span>
+          <h1 className="mb-6 text-2xl font-bold">Masuk ke toko Anda</h1>
 
         <label htmlFor="email" className="mb-1 block text-sm font-semibold text-primary-soft">
           Email
@@ -124,7 +142,8 @@ export function LoginPage() {
         <p className="mt-4 text-center text-xs text-muted">
           Kendi&apos;s Market untuk satu toko — akun dikelola pemilik.
         </p>
-      </form>
+        </form>
+      </div>
     </main>
   );
 }

@@ -23,6 +23,7 @@ export function listProductsApi(
   if (params.search) q.set('search', params.search);
   if (params.status && params.status !== 'SEMUA') q.set('status', params.status);
   if (params.tipe && params.tipe !== 'SEMUA') q.set('tipe', params.tipe);
+  if (params.consignorId) q.set('consignorId', params.consignorId);
   q.set('page', String(params.page));
   q.set('limit', String(params.limit ?? 20));
   const qs = q.toString();

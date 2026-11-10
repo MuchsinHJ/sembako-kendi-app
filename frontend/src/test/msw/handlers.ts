@@ -169,6 +169,7 @@ export const handlers = [
     const status = url.searchParams.get('status');
     const tipe = url.searchParams.get('tipe');
     const search = url.searchParams.get('search') ?? '';
+    const consignorId = url.searchParams.get('consignorId');
     const page = Number(url.searchParams.get('page') ?? '1');
     const limit = Number(url.searchParams.get('limit') ?? '20');
 
@@ -176,6 +177,7 @@ export const handlers = [
       (p) =>
         (!status || p.status === status) &&
         (!tipe || p.tipe === tipe) &&
+        (!consignorId || p.consignorId === consignorId) &&
         (!search || p.nama.toLowerCase().includes(search.toLowerCase()))
     );
     return HttpResponse.json({ success: true, data: paginate(list, page, limit) });
@@ -425,16 +427,9 @@ export const handlers = [
     return HttpResponse.json({ success: true, data: next });
   }),
 
-  // ─── Consignors (opsi form titipan) ────────────────────────────────────────
-  http.get('*/api/v1/consignors', () =>
-    HttpResponse.json({
-      success: true,
-      data: {
-        data: [{ id: 'c1', nama: 'Bu Rina', noHp: null, catatan: null, status: 'AKTIF' }],
-        pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
-      },
-    })
-  ),
+  // ─── Consignors ──────────────────────────────────────────────────────────────
+  // Daftar + detail + payments + status + konsinyasi ditangani consignorHandlers
+  // (di bawah), termasuk filter status=AKTIF utk form titipan.
 ];
 
 // ─── Transactions & Debts fixtures ──────────────────────────────────────────
@@ -584,6 +579,491 @@ const transactionNotFound = () =>
     { status: 404 }
   );
 
-export const server = setupServer(...handlers);
+// ─── Consignors / Consignment ─────────────────────────────────────────────────
 
-export { resetProducts, registerProduct, resetTransactions, registerTransaction };
+export interface FixtureConsignor {
+  id: string;
+  nama: string;
+  noHp: string | null;
+  catatan: string | null;
+  status: 'AKTIF' | 'NONAKTIF';
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Saldo per penitip (mock GET /consignors/:id/balance). */
+export interface FixtureBalance {
+  consignorId: string;
+  totalTerjualModal: string;
+  totalDisetor: string;
+  saldo: string;
+}
+
+export const consignorFixtures: FixtureConsignor[] = [
+  {
+    id: 'c1',
+    nama: 'Bu Rina',
+    noHp: '081234567890',
+    catatan: null,
+    status: 'AKTIF',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'c2',
+    nama: 'Pak Joko',
+    noHp: null,
+    catatan: 'Penitip rokok',
+    status: 'AKTIF',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'c3',
+    nama: 'Bu Sari',
+    noHp: '089876543210',
+    catatan: null,
+    status: 'NONAKTIF',
+    createdAt: now,
+    updatedAt: now,
+  },
+];
+
+/** Saldo c1 negatif (setoran > kewajiban) — BR-F. */
+export const balanceFixtures: Record<string, FixtureBalance> = {
+  c1: { consignorId: 'c1', totalTerjualModal: '40000.00', totalDisetor: '55000.00', saldo: '-15000.00' },
+  c2: { consignorId: 'c2', totalTerjualModal: '120000.00', totalDisetor: '0.00', saldo: '120000.00' },
+  c3: { consignorId: 'c3', totalTerjualModal: '0.00', totalDisetor: '0.00', saldo: '0.00' },
+};
+
+export const consignorPaymentFixtures: Array<{
+  id: string;
+  consignorId: string;
+  tanggalBayar: string;
+  jumlahBayar: string;
+  saldoSetelahBayar: string;
+  catatan: string | null;
+  dicatatOlehId: string;
+  dicatatOleh: typeof user;
+}> = [
+  {
+    id: 'cp1',
+    consignorId: 'c2',
+    tanggalBayar: recentDate,
+    jumlahBayar: '50000.00',
+    saldoSetelahBayar: '70000.00',
+    catatan: null,
+    dicatatOlehId: 'u1',
+    dicatatOleh: user,
+  },
+];
+
+let consignors = [...consignorFixtures];
+let payments = [...consignorPaymentFixtures];
+
+function resetConsignors() {
+  consignors = [...consignorFixtures];
+  payments = [...consignorPaymentFixtures];
+}
+
+function ringkasan(id: string) {
+  const titipan = products.filter((p) => p.consignorId === id && p.status === 'AKTIF');
+  return {
+    jumlahProdukTitipanAktif: titipan.length,
+    totalStokTitipan: titipan.reduce((s, p) => s + p.stok, 0),
+  };
+}
+
+const consignorNotFound = () =>
+  HttpResponse.json(
+    { success: false, error: { code: 'NOT_FOUND', message: 'Penitip tidak ditemukan.' } },
+    { status: 404 }
+  );
+
+const consignorHandlers = [
+  http.get('*/api/v1/consignors', ({ request }) => {
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status');
+    const search = url.searchParams.get('search') ?? '';
+    const punyaSaldo = url.searchParams.get('punyaSaldo') === 'true';
+    const page = Number(url.searchParams.get('page') ?? '1');
+    const limit = Number(url.searchParams.get('limit') ?? '20');
+
+    let list = consignors.filter(
+      (c) => (!status || c.status === status) && (!search || c.nama.toLowerCase().includes(search.toLowerCase()))
+    );
+    if (punyaSaldo) {
+      list = list.filter((c) => Number(balanceFixtures[c.id]?.saldo ?? '0') !== 0);
+    }
+    return HttpResponse.json({ success: true, data: paginate(list, page, limit) });
+  }),
+
+  http.get('*/api/v1/consignors/:id', ({ params }) => {
+    const c = consignors.find((x) => x.id === params.id);
+    if (!c) return consignorNotFound();
+    return HttpResponse.json({ success: true, data: { ...c, ringkasan: ringkasan(c.id) } });
+  }),
+
+  http.get('*/api/v1/consignors/:id/balance', ({ params }) => {
+    const b = balanceFixtures[params.id as string];
+    if (!b) return consignorNotFound();
+    return HttpResponse.json({ success: true, data: b });
+  }),
+
+  http.get('*/api/v1/consignors/:id/payments', ({ params, request }) => {
+    const url = new URL(request.url);
+    const page = Number(url.searchParams.get('page') ?? '1');
+    const limit = Number(url.searchParams.get('limit') ?? '20');
+    const list = payments.filter((p) => p.consignorId === params.id);
+    return HttpResponse.json({ success: true, data: paginate(list, page, limit) });
+  }),
+
+  http.post('*/api/v1/consignors/:id/payments', async ({ params, request }) => {
+    const c = consignors.find((x) => x.id === params.id);
+    const b = balanceFixtures[params.id as string];
+    if (!c || !b) return consignorNotFound();
+    const body = (await request.json()) as { jumlahBayar: number; catatan?: string };
+    if (body.jumlahBayar <= 0 || body.jumlahBayar > Number(b.saldo)) {
+      return HttpResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'CONSIGNOR_OVERPAYMENT',
+            message: 'Nominal setoran melebihi saldo kewajiban penitip (BR-D).',
+          },
+        },
+        { status: 422 }
+      );
+    }
+    const payment = {
+      id: `cp-${Date.now()}`,
+      consignorId: c.id,
+      tanggalBayar: new Date().toISOString(),
+      jumlahBayar: String(body.jumlahBayar),
+      saldoSetelahBayar: String(Number(b.saldo) - body.jumlahBayar),
+      catatan: body.catatan ?? null,
+      dicatatOlehId: 'u1',
+      dicatatOleh: user,
+    };
+    payments = [payment, ...payments];
+    balanceFixtures[c.id] = {
+      ...b,
+      totalDisetor: String(Number(b.totalDisetor) + body.jumlahBayar),
+      saldo: String(Number(b.saldo) - body.jumlahBayar),
+    };
+    return HttpResponse.json({ success: true, data: payment });
+  }),
+
+  http.patch('*/api/v1/consignors/:id/status', async ({ params, request }) => {
+    const c = consignors.find((x) => x.id === params.id);
+    if (!c) return consignorNotFound();
+    const body = (await request.json()) as { status: 'AKTIF' | 'NONAKTIF' };
+    if (body.status === 'NONAKTIF') {
+      const blockers = products.filter((p) => p.consignorId === c.id && p.status === 'AKTIF' && p.stok > 0);
+      if (blockers.length > 0) {
+        return HttpResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'CONSIGNOR_HAS_STOCK',
+              message: 'Penitip masih memiliki produk titipan yang berstok, sehingga tidak dapat dinonaktifkan (BR-E).',
+              details: { products: blockers.map((p) => ({ id: p.id, nama: p.nama, stok: p.stok })) },
+            },
+          },
+          { status: 422 }
+        );
+      }
+    }
+    consignors = consignors.map((x) => (x.id === c.id ? { ...x, status: body.status } : x));
+    return HttpResponse.json({ success: true, data: { ...c, status: body.status, ringkasan: ringkasan(c.id) } });
+  }),
+
+  http.post('*/api/v1/consignment/receipts', async ({ request }) => {
+    const body = (await request.json()) as { productId: string; jumlah: number; catatan?: string };
+    const p = products.find((x) => x.id === body.productId);
+    if (!p) return notFound();
+    return HttpResponse.json({
+      success: true,
+      data: {
+        id: `m-${Date.now()}`,
+        consignorId: p.consignorId ?? '',
+        productId: p.id,
+        tipe: 'TERIMA',
+        jumlah: body.jumlah,
+        stokSebelum: p.stok,
+        stokSesudah: p.stok + body.jumlah,
+        catatan: body.catatan ?? null,
+        dicatatOlehId: 'u1',
+        dicatatOleh: user,
+        createdAt: new Date().toISOString(),
+        product: { id: p.id, nama: p.nama, tipe: p.tipe, stok: p.stok + body.jumlah },
+        consignor: { id: p.consignorId ?? '', nama: consignors.find((c) => c.id === p.consignorId)?.nama ?? '' },
+      },
+    });
+  }),
+
+  http.post('*/api/v1/consignment/returns', async ({ request }) => {
+    const body = (await request.json()) as { productId: string; jumlah: number; catatan?: string };
+    const p = products.find((x) => x.id === body.productId);
+    if (!p) return notFound();
+    if (body.jumlah > p.stok) {
+      return HttpResponse.json(
+        { success: false, error: { code: 'STOCK_EXCEEDED', message: 'Jumlah retur melebihi stok tersedia (BR-I).' } },
+        { status: 422 }
+      );
+    }
+    return HttpResponse.json({
+      success: true,
+      data: {
+        id: `m-${Date.now()}`,
+        consignorId: p.consignorId ?? '',
+        productId: p.id,
+        tipe: 'RETUR',
+        jumlah: body.jumlah,
+        stokSebelum: p.stok,
+        stokSesudah: p.stok - body.jumlah,
+        catatan: body.catatan ?? null,
+        dicatatOlehId: 'u1',
+        dicatatOleh: user,
+        createdAt: new Date().toISOString(),
+        product: { id: p.id, nama: p.nama, tipe: p.tipe, stok: p.stok - body.jumlah },
+        consignor: { id: p.consignorId ?? '', nama: consignors.find((c) => c.id === p.consignorId)?.nama ?? '' },
+      },
+    });
+  }),
+
+  http.get('*/api/v1/consignment/movements', ({ request }) => {
+    const url = new URL(request.url);
+    const page = Number(url.searchParams.get('page') ?? '1');
+    const limit = Number(url.searchParams.get('limit') ?? '20');
+    return HttpResponse.json({ success: true, data: paginate([], page, limit) });
+  }),
+];
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+
+export interface ReportFixtures {
+  sales: {
+    periode: { start: string; end: string };
+    omzet: string;
+    profit: string;
+    transactionCount: number;
+    perTipe: { MILIK_SENDIRI: { omzet: string; profit: string }; TITIPAN: { omzet: string; profit: string } };
+    transactions: Array<{ id: string; tanggal: string; total: string; statusPembayaran: string; namaPembeli: string | null }>;
+  };
+  debts: {
+    periode: { start: string; end: string };
+    totalSaldoUtang: string;
+    debtCount: number;
+    debts: Array<{
+      id: string;
+      tanggal: string;
+      total: string;
+      namaPembeli: string;
+      noHpPembeli: string | null;
+      sisaSaldoUtang: string;
+      payments: Array<{ id: string; tanggalBayar: string; jumlahBayar: string; saldoSetelahBayar: string }>;
+    }>;
+  };
+  trend: {
+    periode: { start: string; end: string };
+    topProducts: Array<{ productId: string; namaProduk: string; kategori: string; totalQuantitySold: number; totalRevenue: string }>;
+  };
+  consignment: {
+    periode: { start: string; end: string };
+    totalModalPeriode: string;
+    totalDisetorPeriode: string;
+    totalSaldoAkhir: string;
+    consignors: Array<{
+      consignorId: string;
+      nama: string;
+      status: string;
+      terjualPeriode: string;
+      modalPeriode: string;
+      disetorPeriode: string;
+      saldoAkhir: string;
+    }>;
+  };
+}
+
+const defaultReportFixtures: ReportFixtures = {
+  sales: {
+    periode: { start: '', end: '' },
+    omzet: '111000.00',
+    profit: '23000.00',
+    transactionCount: 2,
+    perTipe: {
+      MILIK_SENDIRI: { omzet: '105000.00', profit: '19000.00' },
+      TITIPAN: { omzet: '6000.00', profit: '4000.00' },
+    },
+    transactions: [
+      { id: 't1', tanggal: recentDate, total: '75000.00', statusPembayaran: 'LUNAS', namaPembeli: null },
+      {
+        id: 't2',
+        tanggal: oldDate,
+        total: '36000.00',
+        statusPembayaran: 'UTANG',
+        namaPembeli: 'Pak Budi',
+      },
+    ],
+  },
+  debts: {
+    periode: { start: '', end: '' },
+    totalSaldoUtang: '36000.00',
+    debtCount: 1,
+    debts: [
+      {
+        id: 't2',
+        tanggal: oldDate,
+        total: '36000.00',
+        namaPembeli: 'Pak Budi',
+        noHpPembeli: null,
+        sisaSaldoUtang: '36000.00',
+        payments: [],
+      },
+    ],
+  },
+  trend: {
+    periode: { start: '', end: '' },
+    topProducts: [
+      { productId: 'p1', namaProduk: 'Beras 5kg', kategori: 'Sembako', totalQuantitySold: 3, totalRevenue: '225000.00' },
+      { productId: 'p2', namaProduk: 'Gula Pasir 1kg', kategori: 'Sembako', totalQuantitySold: 2, totalRevenue: '36000.00' },
+    ],
+  },
+  consignment: {
+    periode: { start: '', end: '' },
+    totalModalPeriode: '25000.00',
+    totalDisetorPeriode: '0.00',
+    totalSaldoAkhir: '45000.00',
+    consignors: [
+      {
+        consignorId: 'c1',
+        nama: 'Bu Rina',
+        status: 'AKTIF',
+        terjualPeriode: '30000.00',
+        modalPeriode: '25000.00',
+        disetorPeriode: '0.00',
+        saldoAkhir: '-15000.00',
+      },
+      {
+        consignorId: 'c2',
+        nama: 'Pak Joko',
+        status: 'AKTIF',
+        terjualPeriode: '0.00',
+        modalPeriode: '0.00',
+        disetorPeriode: '0.00',
+        saldoAkhir: '45000.00',
+      },
+      {
+        consignorId: 'c3',
+        nama: 'Bu Sari',
+        status: 'NONAKTIF',
+        terjualPeriode: '0.00',
+        modalPeriode: '0.00',
+        disetorPeriode: '0.00',
+        saldoAkhir: '0.00',
+      },
+    ],
+  },
+};
+
+/** Fixture laporan aktif (bisa diganti per-test). */
+export let reportFixtures: ReportFixtures = { ...defaultReportFixtures };
+
+/** Ganti fixture laporan dari override test. */
+export function setReportFixtures(next: Partial<ReportFixtures>) {
+  reportFixtures = { ...reportFixtures, ...next };
+}
+
+export function resetReportFixtures() {
+  reportFixtures = { ...defaultReportFixtures };
+}
+
+const reportHandlers = [
+  http.get('*/api/v1/reports/sales', ({ request }) => {
+    const url = new URL(request.url);
+    return HttpResponse.json({
+      success: true,
+      data: { ...reportFixtures.sales, periode: { start: url.searchParams.get('startDate') ?? '', end: url.searchParams.get('endDate') ?? '' } },
+    });
+  }),
+
+  http.get('*/api/v1/reports/debts', ({ request }) => {
+    const url = new URL(request.url);
+    return HttpResponse.json({
+      success: true,
+      data: { ...reportFixtures.debts, periode: { start: url.searchParams.get('startDate') ?? '', end: url.searchParams.get('endDate') ?? '' } },
+    });
+  }),
+
+  http.get('*/api/v1/reports/product-trend', ({ request }) => {
+    const url = new URL(request.url);
+    return HttpResponse.json({
+      success: true,
+      data: { ...reportFixtures.trend, periode: { start: url.searchParams.get('startDate') ?? '', end: url.searchParams.get('endDate') ?? '' } },
+    });
+  }),
+
+  http.get('*/api/v1/reports/consignment', ({ request }) => {
+    const url = new URL(request.url);
+    return HttpResponse.json({
+      success: true,
+      data: { ...reportFixtures.consignment, periode: { start: url.searchParams.get('startDate') ?? '', end: url.searchParams.get('endDate') ?? '' } },
+    });
+  }),
+
+  http.get('*/api/v1/reports/sales/export', ({ request }) => {
+    const url = new URL(request.url);
+    const format = url.searchParams.get('format') ?? 'xlsx';
+    const start = (url.searchParams.get('startDate') ?? '').replaceAll('-', '');
+    const end = (url.searchParams.get('endDate') ?? '').replaceAll('-', '');
+    const type =
+      format === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return new HttpResponse(new Blob(['x'], { type }), {
+      headers: {
+        'Content-Type': type,
+        'Content-Disposition': `attachment; filename="laporan-penjualan_${start}_${end}.${format}"`,
+      },
+    });
+  }),
+
+  http.get('*/api/v1/reports/debts/export', ({ request }) => {
+    const url = new URL(request.url);
+    const format = url.searchParams.get('format') ?? 'xlsx';
+    const start = (url.searchParams.get('startDate') ?? '').replaceAll('-', '');
+    const end = (url.searchParams.get('endDate') ?? '').replaceAll('-', '');
+    const type =
+      format === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return new HttpResponse(new Blob(['x'], { type }), {
+      headers: {
+        'Content-Type': type,
+        'Content-Disposition': `attachment; filename="laporan-utang_${start}_${end}.${format}"`,
+      },
+    });
+  }),
+
+  http.get('*/api/v1/dashboard/summary', () => {
+    const totalTransaksi = transactions.filter((t) => t.statusTransaksi === 'AKTIF');
+    const omzetHariIni = totalTransaksi.reduce((s, t) => s + Number(t.total), 0);
+    return HttpResponse.json({
+      success: true,
+      data: {
+        hariIni: { omzet: `${omzetHariIni}.00`, profit: '0.00', transactionCount: totalTransaksi.length },
+        bulanBerjalan: { omzet: `${omzetHariIni}.00`, profit: '0.00', transactionCount: totalTransaksi.length },
+        produkLowStock: products
+          .filter((p) => p.status === 'AKTIF' && p.stok <= p.stokMinimum)
+          .map((p) => ({ id: p.id, nama: p.nama, stok: p.stok, stokMinimum: p.stokMinimum, kategori: p.kategori })),
+        totalSaldoUtang: '36000.00',
+        totalKewajibanPenitip: '0.00',
+      },
+    });
+  }),
+];
+
+export const server = setupServer(...handlers, ...consignorHandlers, ...reportHandlers);
+
+export { resetProducts, registerProduct, resetTransactions, registerTransaction, resetConsignors };

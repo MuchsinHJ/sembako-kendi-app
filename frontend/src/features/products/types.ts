@@ -37,6 +37,8 @@ export interface ProductFilters {
   search?: string;
   status?: StatusFilter;
   tipe?: TipeFilter;
+  /** Filter titipan per penitip (backend `GET /products?consignorId=`). */
+  consignorId?: string;
   /** Batas halaman (default backend 20; POS minta 100). */
   limit?: number;
 }

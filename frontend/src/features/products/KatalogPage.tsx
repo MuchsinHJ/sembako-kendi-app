@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Package, Plus } from 'lucide-react';
+import { Package, Plus, TriangleAlert } from 'lucide-react';
 import { useProducts } from './api';
 import { ProductFormModal } from './components/ProductFormModal';
 import { Button } from '@/components/Button';
@@ -26,53 +26,66 @@ const TIPE_OPTIONS = [
   { value: 'TITIPAN', label: 'Titipan' },
 ] as const;
 
-function ProductThumb({ product, className }: { product: Product; className?: string }) {
+function ProductThumb({ product }: { product: Product }) {
   return product.fotoUrl ? (
-    <img src={product.fotoUrl} alt="" className={cn('object-cover', className)} />
+    <img
+      src={product.fotoUrl}
+      alt=""
+      className={cn('aspect-square w-full object-cover', product.status === 'NONAKTIF' && 'opacity-55')}
+    />
   ) : (
-    <div className={cn('flex items-center justify-center bg-muted-soft text-accent', className)}>
-      <Package className="size-6" aria-hidden="true" />
+    <div className={cn('flex aspect-square w-full items-center justify-center bg-muted-soft text-accent', product.status === 'NONAKTIF' && 'opacity-55')}>
+      <Package className="size-10" aria-hidden="true" />
     </div>
   );
 }
 
+/** Kartu bergambar (06 §5.1): foto placeholder + badge + nama + kategori + harga + stok. */
 function ProductCard({ product }: { product: Product }) {
+  const menipis = product.stok <= product.stokMinimum;
   return (
     <Link
       to={`/produk/${product.id}`}
-      className="press-scale flex items-center gap-3 rounded-card-sm border border-line-soft bg-surface p-3 focus:outline-none focus:ring-2 focus:ring-accent/40"
+      className="press-scale group flex flex-col overflow-hidden rounded-card border border-line-soft bg-surface focus:outline-none focus:ring-2 focus:ring-accent/40"
     >
-      <ProductThumb product={product} className="size-14 shrink-0 rounded-input" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-primary">{product.nama}</p>
-        <p className="mt-0.5 truncate text-xs text-muted">
-          {product.kategori} · {product.tipe === 'TITIPAN' ? 'Titipan' : 'Milik Sendiri'}
+      <div className="relative">
+        <ProductThumb product={product} />
+        <div className="absolute left-2 top-2">
+          <Badge variant="netral" label={product.status === 'AKTIF' ? 'Aktif' : 'Nonaktif'} />
+        </div>
+        {product.tipe === 'TITIPAN' && (
+          <div className="absolute right-2 top-2">
+            <Badge variant="netral" label="Titipan" />
+          </div>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col gap-0.5 p-3.5">
+        <p className="line-clamp-2 text-sm font-semibold text-primary">{product.nama}</p>
+        <p className="truncate text-xs text-muted">{product.kategori}</p>
+        <p className="mt-1 text-lg font-bold tabular-nums text-primary">{formatRupiah(product.hargaJual)}</p>
+        <p className={cn('mt-0.5 flex items-center gap-1 text-xs', menipis ? 'text-warning' : 'text-muted')}>
+          {menipis && <TriangleAlert className="size-3.5" aria-hidden="true" />}
+          Sisa {product.stok}
         </p>
-        <p className="mt-1 text-sm font-bold text-primary">{formatRupiah(product.hargaJual)}</p>
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <Badge variant="netral" label={product.status === 'AKTIF' ? 'Aktif' : 'Nonaktif'} />
-        <span className="text-xs text-muted">Stok {product.stok}</span>
-      </div>
-      <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden="true" />
     </Link>
   );
 }
 
 function SkeletonCard() {
   return (
-    <div className="flex animate-pulse items-center gap-3 rounded-card-sm border border-line-soft bg-surface p-3">
-      <div className="size-14 shrink-0 rounded-input bg-muted-soft" />
-      <div className="flex-1 space-y-2">
+    <div className="animate-pulse overflow-hidden rounded-card border border-line-soft bg-surface">
+      <div className="aspect-square w-full bg-muted-soft" />
+      <div className="space-y-2 p-3.5">
         <div className="h-3.5 w-2/3 rounded bg-muted-soft" />
         <div className="h-3 w-1/2 rounded bg-muted-soft" />
-        <div className="h-3.5 w-1/3 rounded bg-muted-soft" />
+        <div className="h-4 w-1/3 rounded bg-muted-soft" />
       </div>
     </div>
   );
 }
 
-/** Layar Katalog (04 §3, 03: Katalog Produk) — grid + filter + load more. */
+/** Layar Katalog (04 §3, 06 §5.1) — grid 1/2/3/4 + filter + load more. */
 export function KatalogPage() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -90,13 +103,15 @@ export function KatalogPage() {
 
   const products = data?.pages.flatMap((p) => p.data) ?? [];
   const total = data?.pages[0]?.pagination.total;
+  const menipis = products.filter((p) => p.stok <= p.stokMinimum).length;
+  const titipan = products.filter((p) => p.tipe === 'TITIPAN').length;
 
   return (
     <div className="flex flex-col gap-4">
       <ScreenHeader
         eyebrow="KATALOG"
         title="Produk"
-        info={total !== undefined ? `${total} produk` : undefined}
+        info={total !== undefined ? `${total} produk${menipis ? ` · ${menipis} stok menipis` : ''}${titipan ? ` · ${titipan} titipan` : ''}` : undefined}
         action={
           <Button onClick={() => setFormOpen(true)} className="h-11 px-4">
             <Plus className="size-4" aria-hidden="true" />
@@ -107,7 +122,7 @@ export function KatalogPage() {
 
       <div className="flex flex-col gap-3">
         <SearchField value={search} onChange={setSearch} placeholder="Cari produk…" />
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-wrap gap-2">
           {TIPE_OPTIONS.map((opt) => (
             <ChipFilter
               key={opt.value}
@@ -123,8 +138,8 @@ export function KatalogPage() {
       </div>
 
       {isLoading && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }, (_, i) => (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }, (_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
@@ -165,7 +180,7 @@ export function KatalogPage() {
       )}
 
       {!isLoading && !isError && products.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 xl:gap-[18px]">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}

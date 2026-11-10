@@ -105,63 +105,71 @@ export function DetailProdukPage() {
         action={<Badge variant={p.status === 'AKTIF' ? 'lunas' : 'netral'} label={p.status === 'AKTIF' ? 'Aktif' : 'Nonaktif'} />}
       />
 
-      {p.fotoUrl ? (
-        <img src={p.fotoUrl} alt={`Foto ${p.nama}`} className="h-[140px] w-full rounded-card border border-line-soft object-cover" />
-      ) : (
-        <div className="flex h-[140px] w-full items-center justify-center rounded-card border border-line-soft bg-surface-muted">
-          <Package className="size-12 text-accent" aria-hidden="true" />
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-[18px]">
+        {/* Kiri: foto besar (06 §5.6) */}
+        <div className="w-full md:w-1/2">
+          {p.fotoUrl ? (
+            <img src={p.fotoUrl} alt={`Foto ${p.nama}`} className="aspect-square w-full rounded-card border border-line-soft object-cover" />
+          ) : (
+            <div className="flex aspect-square w-full items-center justify-center rounded-card border border-line-soft bg-surface-muted">
+              <Package className="size-16 text-accent" aria-hidden="true" />
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[22px] font-bold text-primary">{p.nama}</h2>
-        <p className="text-xs text-muted">
-          {p.kategori} · {isTitipan ? 'Titipan' : 'Milik Sendiri'}
-          {isTitipan && p.consignor && ` · ${p.consignor.nama}`}
-        </p>
-      </div>
+        {/* Kanan: identitas + kartu + aksi */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-[22px] font-bold text-primary">{p.nama}</h2>
+            <p className="text-xs text-muted">
+              {p.kategori} · {isTitipan ? 'Titipan' : 'Milik Sendiri'}
+              {isTitipan && p.consignor && ` · ${p.consignor.nama}`}
+            </p>
+          </div>
 
-      <Card variant="metric">
-        <span className="text-xs text-muted">Harga jual</span>
-        <span className="text-[28px] font-bold leading-none text-primary">{formatRupiah(p.hargaJual)}</span>
-      </Card>
+          <Card variant="metric">
+            <span className="text-xs text-muted">Harga jual</span>
+            <span className="text-[28px] font-bold leading-none text-primary">{formatRupiah(p.hargaJual)}</span>
+          </Card>
 
-      <Card variant="list" className="divide-y divide-line-soft">
-        <div className="flex items-center justify-between py-2.5">
-          <span className="text-sm text-muted">Harga modal</span>
-          <span className="text-sm font-semibold text-primary">{formatRupiah(p.hargaModal)}</span>
+          <Card variant="list" className="divide-y divide-line-soft">
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-sm text-muted">Harga modal</span>
+              <span className="text-sm font-semibold text-primary">{formatRupiah(p.hargaModal)}</span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-sm text-muted">Stok saat ini</span>
+              <span className="text-sm font-semibold text-primary">{p.stok}</span>
+            </div>
+            <div className="flex items-center justify-between py-2.5">
+              <span className="text-sm text-muted">Stok minimum</span>
+              <span className="text-sm font-semibold text-primary">{p.stokMinimum}</span>
+            </div>
+          </Card>
+
+          {actionMsg && (
+            <p role="status" className="text-sm font-medium text-primary-soft">
+              {actionMsg}
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2.5">
+            <Button onClick={() => setEditOpen(true)}>Edit Produk</Button>
+            <Button variant="secondary" onClick={() => setAdjustOpen(true)}>
+              Sesuaikan Stok
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={p.status === 'NONAKTIF'}
+              onClick={() => setNonaktifOpen(true)}
+            >
+              {p.status === 'NONAKTIF' ? 'Produk Nonaktif' : 'Nonaktifkan Produk'}
+            </Button>
+            <Button variant="destructive" onClick={() => setHapusOpen(true)}>
+              Hapus Produk
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center justify-between py-2.5">
-          <span className="text-sm text-muted">Stok saat ini</span>
-          <span className="text-sm font-semibold text-primary">{p.stok}</span>
-        </div>
-        <div className="flex items-center justify-between py-2.5">
-          <span className="text-sm text-muted">Stok minimum</span>
-          <span className="text-sm font-semibold text-primary">{p.stokMinimum}</span>
-        </div>
-      </Card>
-
-      {actionMsg && (
-        <p role="status" className="text-sm font-medium text-primary-soft">
-          {actionMsg}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-2.5">
-        <Button onClick={() => setEditOpen(true)}>Edit Produk</Button>
-        <Button variant="secondary" onClick={() => setAdjustOpen(true)}>
-          Sesuaikan Stok
-        </Button>
-        <Button
-          variant="destructive"
-          disabled={p.status === 'NONAKTIF'}
-          onClick={() => setNonaktifOpen(true)}
-        >
-          {p.status === 'NONAKTIF' ? 'Produk Nonaktif' : 'Nonaktifkan Produk'}
-        </Button>
-        <Button variant="destructive" onClick={() => setHapusOpen(true)}>
-          Hapus Produk
-        </Button>
       </div>
 
       <ProductFormModal open={editOpen} onClose={() => setEditOpen(false)} initial={p} />

@@ -107,7 +107,7 @@ export function ProductFormModal({ open, onClose, initial }: ProductFormModalPro
       onClose();
     };
     const onError = (err: unknown) => {
-      if (err instanceof ApiError && err.status === 400 && err.details) {
+      if (err instanceof ApiError && err.status === 400 && Array.isArray(err.details)) {
         const next: FieldErrors = {};
         for (const d of err.details) next[d.field as keyof ProductFormValues] = d.issue;
         setErrors(next);
