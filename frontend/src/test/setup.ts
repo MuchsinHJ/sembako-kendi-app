@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterEach, afterAll } from 'vitest';
 import { queryClient } from '@/lib/queryClient';
-import { server } from './msw/server';
+import { server, resetProducts, resetTransactions } from './msw/server';
 import { setAccessToken } from '@/lib/http';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
@@ -10,5 +10,7 @@ afterEach(() => {
   queryClient.clear();
   setAccessToken(null);
   server.resetHandlers();
+  resetProducts();
+  resetTransactions();
 });
 afterAll(() => server.close());
