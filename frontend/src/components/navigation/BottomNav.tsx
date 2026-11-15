@@ -1,5 +1,5 @@
 import { useLocation, NavLink } from 'react-router-dom';
-import { House, Package, CirclePlus, Wallet, History, type LucideIcon } from 'lucide-react';
+import { House, Package, Plus, Wallet, History, type LucideIcon } from 'lucide-react';
 import { PATHS } from '@/routes/paths';
 import { cn } from '@/lib/cn';
 
@@ -10,10 +10,9 @@ interface NavItem {
 }
 
 /** Tepat 5 item — Transaksi = FAB tengah (02 §1). */
-const ITEMS: NavItem[] = [
+const SIDE_ITEMS: NavItem[] = [
   { to: PATHS.home, label: 'Beranda', icon: House },
   { to: PATHS.products, label: 'Produk', icon: Package },
-  { to: PATHS.pos, label: 'Transaksi', icon: CirclePlus },
   { to: PATHS.debts, label: 'Utang', icon: Wallet },
   { to: PATHS.history, label: 'Riwayat', icon: History },
 ];
@@ -32,11 +31,11 @@ function RegularItem({ item }: { item: NavItem }) {
       to={item.to}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex h-12 flex-col items-center justify-center gap-1 rounded-segment-active px-1',
-        active ? 'bg-bg' : 'bg-transparent'
+        'press-scale flex h-12 w-16 flex-col items-center justify-center gap-1 rounded-segment p-1 transition-colors duration-150 ease-out',
+        active ? 'bg-bg' : 'bg-transparent hover:bg-surface-muted'
       )}
     >
-      <Icon aria-hidden="true" className={cn('size-[22px]', active ? 'text-primary' : 'text-accent')} strokeWidth={active ? 2.5 : 2} />
+      <Icon aria-hidden="true" className={cn('size-[22px]', active ? 'text-primary' : 'text-accent')} strokeWidth={active ? 2.5 : 1.75} />
       <span
         className={cn(
           'text-[10.5px] leading-none',
@@ -49,39 +48,52 @@ function RegularItem({ item }: { item: NavItem }) {
   );
 }
 
-/** Bilah bawah mobile (<768px) — padanya saja di layar kecil. */
+/** Bilah bawah mobile (<768px) — 64×88, 4 item samping + FAB Transaksi (02 §1). */
 export function BottomNav() {
   const { pathname } = useLocation();
   const transactionActive = pathname === PATHS.pos;
 
   return (
-    <nav aria-label="Navigasi utama" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface md:hidden">
-      <div className="relative mx-auto max-w-md border-t border-line bg-surface px-3 pb-2 pt-1">
-        {/* FAB Transaksi — terangkat, selalu tampil sebagai aksi utama */}
+    <nav aria-label="Navigasi utama" className="fixed inset-x-0 bottom-0 z-40 bg-surface border-t border-line md:hidden">
+      {/* Container 390px — tinggi 88: 75px terlihat + 27px FAB naik melewati tepi atas.
+          Item biasa y=15..63 (canvas). */}
+      <div className="relative mx-auto h-[75px] w-full max-w-[390px]">
+        {SIDE_ITEMS.map((item, i) => (
+          <div
+            key={item.to}
+            className={cn('absolute top-[15px]', i === 0 && 'left-[19px]', i === 1 && 'left-[91px]', i === 2 && 'left-[235px]', i === 3 && 'left-[307px]')}
+          >
+            <RegularItem item={item} />
+          </div>
+        ))}
+
+        {/* FAB Transaksi — naik 27px melewati tepi atas nav (setengah lingkaran) */}
         <NavLink
           to={PATHS.pos}
           aria-label="Transaksi"
           aria-current={transactionActive ? 'page' : undefined}
-          className="absolute left-1/2 top-0 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[3px]"
+          className="press-scale absolute left-[163px] top-[-27px] flex h-[75px] w-16 flex-col items-center"
         >
+          {/* Lingkaran: tetap gelap, hanya beda antara primary vs primary-soft saat aktif (02 §1). */}
           <span
             className={cn(
-              'flex size-[54px] items-center justify-center rounded-full bg-primary',
-              transactionActive ? '' : ''
+              'flex size-[54px] items-center justify-center rounded-full transition-colors duration-150 ease-out',
+              transactionActive ? 'bg-primary-soft' : 'bg-primary hover:bg-primary-soft'
             )}
           >
-            <CirclePlus aria-hidden="true" className="size-[26px] text-bg" strokeWidth={2} />
+            <Plus aria-hidden="true" className="size-6 text-surface" strokeWidth={2} />
           </span>
-          <span className="rounded-full bg-bg px-2 py-0.5 text-[10.5px] font-semibold leading-none text-primary">
+          {/* Pil: bg + primary saat aktif (02 §1 tabel state), transparan + primary-soft saat tidak.
+              Pen M06naQ fill transparan — itu state nonaktif. */}
+          <span
+            className={cn(
+              'flex h-[21px] w-14 items-center justify-center rounded-full text-[10.5px] leading-none transition-colors duration-150 ease-out',
+              transactionActive ? 'bg-bg font-semibold text-primary' : 'font-normal text-primary-soft'
+            )}
+          >
             Transaksi
           </span>
         </NavLink>
-
-        <div className="grid grid-cols-4">
-          {ITEMS.filter((_, i) => i !== 2).map((item) => (
-            <RegularItem key={item.to} item={item} />
-          ))}
-        </div>
       </div>
     </nav>
   );

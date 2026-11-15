@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { PATHS } from '@/routes/paths';
 import { Button } from '@/components/Button';
+import { useAuth } from '@/features/auth/useAuth';
+import { useLogout } from '@/features/auth/api';
 import { cn } from '@/lib/cn';
 
 interface NavItem {
@@ -46,6 +48,8 @@ interface SidebarNavProps {
 export function SidebarNav({ variant }: SidebarNavProps) {
   const { pathname } = useLocation();
   const tablet = variant === 'tablet';
+  const { setAuthenticated } = useAuth();
+  const logout = useLogout(() => setAuthenticated(null));
 
   return (
     <aside
@@ -71,9 +75,9 @@ export function SidebarNav({ variant }: SidebarNavProps) {
               to={item.to}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex items-center justify-center rounded-input text-[13px]',
+                'press-scale flex items-center justify-center rounded-input text-[13px] transition-colors duration-150 ease-out',
                 tablet ? 'h-16 w-full flex-col gap-1 px-1.5 py-3' : 'h-11 w-full gap-[11px] px-4',
-                active ? 'bg-primary' : 'bg-surface'
+                active ? 'bg-primary' : 'bg-surface hover:bg-surface-muted'
               )}
             >
               <Icon
@@ -103,7 +107,14 @@ export function SidebarNav({ variant }: SidebarNavProps) {
               <span className="block truncate text-[10.5px] text-muted">Pemilik usaha</span>
             </span>
           )}
-          <Button type="button" variant="icon" aria-label="Keluar" className={cn(tablet && 'h-11 w-11 bg-surface-muted')}>
+          <Button
+            type="button"
+            variant="icon"
+            aria-label="Keluar"
+            disabled={logout.isPending}
+            onClick={() => logout.mutate()}
+            className={cn(tablet && 'h-11 w-11 bg-surface-muted')}
+          >
             <LogOut className="size-4" aria-hidden="true" />
           </Button>
         </div>

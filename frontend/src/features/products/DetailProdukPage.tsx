@@ -4,6 +4,7 @@ import { Package } from 'lucide-react';
 import { useDeleteProduct, useProduct, useUpdateStatus } from './api';
 import { ProductFormModal } from './components/ProductFormModal';
 import { StockAdjustModal } from './components/StockAdjustModal';
+import { MovementModal } from './components/MovementModal';
 import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
 import { Badge } from '@/components/Badge';
@@ -43,6 +44,7 @@ export function DetailProdukPage() {
   const [hapusOpen, setHapusOpen] = useState(false);
   const [hasTransaction, setHasTransaction] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [movement, setMovement] = useState<'TERIMA' | 'RETUR' | null>(null);
 
   const updateStatus = useUpdateStatus(id);
   const deleteProduct = useDeleteProduct();
@@ -158,6 +160,16 @@ export function DetailProdukPage() {
             <Button variant="secondary" onClick={() => setAdjustOpen(true)}>
               Sesuaikan Stok
             </Button>
+            {isTitipan && (
+              <>
+                <Button variant="secondary" onClick={() => setMovement('TERIMA')}>
+                  Terima Titipan
+                </Button>
+                <Button variant="secondary" onClick={() => setMovement('RETUR')}>
+                  Retur ke Penitip
+                </Button>
+              </>
+            )}
             <Button
               variant="destructive"
               disabled={p.status === 'NONAKTIF'}
@@ -174,6 +186,18 @@ export function DetailProdukPage() {
 
       <ProductFormModal open={editOpen} onClose={() => setEditOpen(false)} initial={p} />
       <StockAdjustModal open={adjustOpen} onClose={() => setAdjustOpen(false)} product={p} />
+      {isTitipan && p.consignor && (
+        <MovementModal
+          open={movement !== null}
+          tipe={movement ?? 'TERIMA'}
+          product={p}
+          consignorNama={p.consignor.nama}
+          onClose={() => {
+            setMovement(null);
+            refetch();
+          }}
+        />
+      )}
 
       <Modal open={nonaktifOpen} onClose={() => setNonaktifOpen(false)} title="Nonaktifkan Produk">
         <p className="text-sm text-primary">

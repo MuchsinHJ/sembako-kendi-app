@@ -53,23 +53,33 @@ export function LaporanKonsinyasiPage() {
           </div>
 
           <Card variant="list" className="flex flex-col gap-1.5">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
+            {/* Header (canvas kSUlr): mobile 3 kolom; md+ 4 kolom (Terjual | Kewajiban | Disetor | Saldo). */}
+            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted md:grid-cols-[1fr_auto_auto_auto_auto]">
               <span>Penitip</span>
               <span className="text-right">Terjual</span>
+              <span className="hidden text-right md:inline">Kewajiban</span>
+              <span className="hidden text-right md:inline">Disetor</span>
               <span className="text-right">Saldo akhir</span>
             </div>
             {data.consignors.map((c) => (
               <div
                 key={c.consignorId}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-line-soft py-2.5"
+                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-line-soft py-2.5 md:grid-cols-[1fr_auto_auto_auto_auto]"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-primary">{c.nama}</p>
-                  <p className="text-xs text-muted">
+                  {/* Kewajiban + Disetor pindah ke kolom md+; mobile tetap subtitle ringkas. */}
+                  <p className="text-xs text-muted md:hidden">
                     Modal {formatRupiah(c.modalPeriode)} · Setor {formatRupiah(c.disetorPeriode)}
                   </p>
                 </div>
                 <span className="text-sm font-semibold text-primary">{formatRupiah(c.terjualPeriode)}</span>
+                <span className="hidden text-right text-xs font-medium text-muted md:inline">
+                  {formatRupiah(c.modalPeriode)}
+                </span>
+                <span className="hidden text-right text-xs font-medium text-muted md:inline">
+                  {formatRupiah(c.disetorPeriode)}
+                </span>
                 <span className="text-sm font-bold text-primary">{formatRupiah(c.saldoAkhir)}</span>
               </div>
             ))}

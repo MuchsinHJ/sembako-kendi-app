@@ -159,50 +159,38 @@ export const refreshTokenService = async (
   refreshTokenOrSessionId: string,
 ): Promise<RefreshResponse> => {
   if (config.AUTH_STRATEGY === 'jwt') {
-    // JWT: verifikasi refresh token, rotasi
+    // Verifikasi refresh token TANPA rotasi: satu token dipakai sampai
+    // kedaluwarsa / logout (direvoke). Rotasi memicu race: request refresh
+    // paralel (StrictMode double-mount / burst 401) membawa cookie lama yang
+    // sudah dihapus oleh request pertama → Prisma P2025 NOT_FOUND.
+    // Trade-off: kehilangan deteksi token reuse; logout tetap revoke token.
     const tokenHash = hashToken(refreshTokenOrSessionId);
-    
+
     const existingToken = await prisma.refreshToken.findUnique({
       where: { tokenHash },
       include: { user: true },
     });
-    
+
     if (!existingToken) {
       throw new UnauthorizedError('Refresh token tidak valid.');
     }
-    
+
     if (existingToken.revokedAt) {
       throw new UnauthorizedError('Refresh token telah direvoke.');
     }
-    
+
     if (existingToken.expiresAt < new Date()) {
       throw new UnauthorizedError('Refresh token telah kedaluwarsa.');
     }
-    
-    // Rotasi: hapus token lama, buat token baru
-    await prisma.refreshToken.delete({ where: { id: existingToken.id } });
-    
-    const newRefreshToken = generateRefreshToken();
-    const newTokenHash = hashToken(newRefreshToken);
-    const expiresAt = calculateRefreshTokenExpiry();
-    
-    await prisma.refreshToken.create({
-      data: {
-        tokenHash: newTokenHash,
-        userId: existingToken.userId,
-        expiresAt,
-      },
-    });
-    
+
     const newAccessToken = generateAccessToken(
       existingToken.user.id,
       existingToken.user.email,
       existingToken.user.nama,
     );
-    
+
     return {
       accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
     };
   } else {
     // Session: verifikasi session ID, perpanjang expiry

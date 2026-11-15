@@ -3,6 +3,7 @@ import { useId } from 'react';
 import { cn } from '@/lib/cn';
 
 interface SearchFieldProps {
+  /** Label tak terlihat untuk aksesibilitas — pen tidak menampilkan label di atas input. */
   label?: string;
   value: string;
   onChange: (value: string) => void;
@@ -10,7 +11,7 @@ interface SearchFieldProps {
   className?: string;
 }
 
-/** Input pencarian 44px (02 §5) — pakai role searchbox + label terlihat. */
+/** Input pencarian 44px (02 §5) — role searchbox + sr-only label (pen: bare input). */
 export function SearchField({
   label = 'Cari',
   value,
@@ -20,8 +21,8 @@ export function SearchField({
 }: SearchFieldProps) {
   const id = useId();
   return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={id} className="text-[12.5px] font-medium text-primary-soft">
+    <div className={cn('relative', className)}>
+      <label htmlFor={id} className="sr-only">
         {label}
       </label>
       <div className="flex h-11 items-center gap-2 rounded-input border border-line bg-surface px-3">
@@ -33,7 +34,7 @@ export function SearchField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="h-full w-full bg-transparent text-sm text-primary placeholder:text-muted focus:outline-none"
+          className="h-full w-full bg-transparent text-[12.5px] text-primary placeholder:text-muted focus:outline-none"
         />
       </div>
     </div>

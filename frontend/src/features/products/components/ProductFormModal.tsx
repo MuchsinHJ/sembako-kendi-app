@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
-import { Trash2 } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Camera, Trash2 } from 'lucide-react';
 import { deletePhotoApi, uploadPhotoApi, useActiveConsignors, useCreateProduct, useUpdateProduct } from '../api';
 import { productFormSchema, type ProductFormValues } from '../schemas';
+import { rapikanKategori } from '../kategori';
 import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
@@ -50,8 +51,28 @@ export function ProductFormModal({ open, onClose, initial }: ProductFormModalPro
   const [values, setValues] = useState<ProductFormValues>(() => (initial ? fromProduct(initial) : EMPTY));
   const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [hapusFoto, setHapusFoto] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => initial?.fotoUrl ?? null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (fotoFile) {
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+        const url = URL.createObjectURL(fotoFile);
+        setPreviewUrl(url);
+        return () => {
+          if (typeof URL.revokeObjectURL === 'function') {
+            URL.revokeObjectURL(url);
+          }
+        };
+      }
+      setPreviewUrl('mock-preview');
+    } else if (!hapusFoto && initial?.fotoUrl) {
+      setPreviewUrl(initial.fotoUrl);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [fotoFile, hapusFoto, initial?.fotoUrl]);
 
   const consignors = useActiveConsignors();
   const create = useCreateProduct();
@@ -65,7 +86,7 @@ export function ProductFormModal({ open, onClose, initial }: ProductFormModalPro
     const stok = parsed.stokAwal && parsed.stokAwal !== '' ? Number(parsed.stokAwal) : 0;
     const base = {
       nama: parsed.nama,
-      kategori: parsed.kategori,
+      kategori: rapikanKategori(parsed.kategori),
       hargaJual: parsed.hargaJual,
       hargaModal: parsed.hargaModal,
       stokMinimum: Number(parsed.stokMinimum),
@@ -128,8 +149,6 @@ export function ProductFormModal({ open, onClose, initial }: ProductFormModalPro
     { value: 'MILIK_SENDIRI', label: 'Milik Sendiri' },
     { value: 'TITIPAN', label: 'Titipan' },
   ];
-
-  const fotoAda = hapusFoto ? false : initial?.fotoUrl ? true : false;
 
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? 'Edit Produk' : 'Tambah Produk'}>
@@ -229,44 +248,79 @@ export function ProductFormModal({ open, onClose, initial }: ProductFormModalPro
           hint="Peringatan stok menipis muncul saat stok ≤ angka ini"
         />
 
-        {/* Foto */}
+        {/* Foto Produk (pen GX7c4 / hdofb) */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[12.5px] font-medium text-primary-soft">Foto produk</span>
-          <div className="flex items-center gap-3">
-            {fotoAda ? (
-              <img src={initial?.fotoUrl ?? ''} alt="Foto produk saat ini" className="size-14 rounded-input object-cover" />
-            ) : (
-              <div className="flex size-14 items-center justify-center rounded-input bg-muted-soft text-xs text-muted">
-                Tanpa foto
+          <span className="text-[12.5px] font-medium text-primary-soft">
+            Foto produk <span className="font-normal text-muted">(opsional)</span>
+          </span>
+
+          {previewUrl ? (
+            <div className="flex items-center gap-3 rounded-[12px] border border-line-soft bg-surface-muted p-2.5">
+              <img
+                src={previewUrl}
+                alt="Pratinjau foto produk"
+                className="size-16 shrink-0 rounded-[10px] border border-line-soft bg-surface object-cover"
+              />
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <p className="truncate text-xs font-semibold text-primary">
+                  {fotoFile ? fotoFile.name : 'Foto produk tersimpan'}
+                </p>
+                <p className="text-[11px] text-muted">
+                  {fotoFile ? `${(fotoFile.size / 1024).toFixed(0)} KB · Siap diunggah` : 'Foto aktif'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="press-scale inline-flex h-8 cursor-pointer items-center justify-center rounded-full border border-line bg-surface px-3 text-xs font-semibold text-primary transition-colors hover:bg-surface-muted">
+                    <span>Ganti foto</span>
+                    <input
+                      type="file"
+                      aria-label="Pilih foto"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] ?? null;
+                        if (f) {
+                          setFotoFile(f);
+                          setHapusFoto(false);
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    aria-label="Hapus foto"
+                    className="press-scale inline-flex h-8 items-center justify-center gap-1 rounded-full border border-danger/30 bg-danger/10 px-2.5 text-xs font-semibold text-danger transition-colors hover:bg-danger/20"
+                    onClick={() => {
+                      setFotoFile(null);
+                      setHapusFoto(true);
+                      setPreviewUrl(null);
+                    }}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                    <span>Hapus</span>
+                  </button>
+                </div>
               </div>
-            )}
-            <label className="press-scale inline-flex h-11 cursor-pointer items-center justify-center rounded-full border border-line bg-surface px-4 text-sm font-semibold text-primary">
-              {fotoAda ? 'Ganti foto' : 'Pilih foto'}
+            </div>
+          ) : (
+            <label className="press-scale flex h-14 w-full cursor-pointer items-center justify-center gap-2.5 rounded-[12px] border border-dashed border-line bg-surface-muted px-4 text-primary-soft transition-colors duration-150 ease-out hover:border-accent hover:bg-surface">
+              <Camera className="size-5 shrink-0 text-primary-soft" aria-hidden="true" />
+              <span className="text-xs font-semibold">Pilih foto (JPG, PNG, WEBP)</span>
               <input
                 type="file"
+                aria-label="Pilih foto"
                 accept="image/jpeg,image/png,image/webp"
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0] ?? null;
-                  setFotoFile(f);
-                  setHapusFoto(false);
+                  if (f) {
+                    setFotoFile(f);
+                    setHapusFoto(false);
+                  }
                 }}
               />
             </label>
-            {isEdit && initial?.fotoUrl && (
-              <Button
-                variant="destructive"
-                className="h-11 px-4"
-                onClick={() => {
-                  setFotoFile(null);
-                  setHapusFoto(true);
-                }}
-              >
-                <Trash2 className="size-4" aria-hidden="true" />
-                Hapus
-              </Button>
-            )}
-          </div>
+          )}
+
           {errors.foto && <p className="text-xs font-medium text-danger">{errors.foto}</p>}
         </div>
 

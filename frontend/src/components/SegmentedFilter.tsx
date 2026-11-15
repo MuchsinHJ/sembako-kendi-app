@@ -35,10 +35,10 @@ export function SegmentedFilter<T extends string>({
               aria-checked={active}
               onClick={() => onChange(opt.value)}
               className={cn(
-                'flex-1 rounded-segment-active text-xs',
+                'press-scale flex-1 rounded-segment-active text-xs transition-colors duration-150 ease-out',
                 active
                   ? 'border border-line-soft bg-surface font-semibold text-primary'
-                  : 'font-medium text-primary-soft'
+                  : 'font-medium text-primary-soft hover:bg-surface/70'
               )}
             >
               {opt.label}

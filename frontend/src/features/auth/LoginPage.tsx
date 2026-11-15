@@ -76,7 +76,7 @@ export function LoginPage() {
           <span className="eyebrow mb-2 block text-xs font-semibold tracking-[1.2px] text-accent md:hidden">
             KENDI&apos;S MARKET
           </span>
-          <h1 className="mb-6 text-2xl font-bold">Masuk ke toko Anda</h1>
+          <h1 className="mb-6 text-2xl font-bold">Masuk ke akun usaha Anda</h1>
 
         <label htmlFor="email" className="mb-1 block text-sm font-semibold text-primary-soft">
           Email
@@ -85,6 +85,7 @@ export function LoginPage() {
           id="email"
           type="email"
           autoComplete="email"
+          placeholder="kasir@kendismarket.id"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className={cn(
@@ -137,6 +138,10 @@ export function LoginPage() {
         >
           {login.isPending ? 'Memasuki…' : 'Masuk'}
         </button>
+
+        <p className="mt-4 text-center text-xs text-muted">
+          Lupa kata sandi? Hubungi pengelola usaha Anda.
+        </p>
 
         {/* Penanda kecil: satu akun toko (MVP). */}
         <p className="mt-4 text-center text-xs text-muted">

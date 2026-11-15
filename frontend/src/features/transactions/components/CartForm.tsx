@@ -166,7 +166,7 @@ export function CartForm({ cart, onQty, onSelesai, onReset, compact = false }: C
       )}
 
       <Button type="submit" disabled={create.isPending || cart.length === 0}>
-        {create.isPending ? 'Menyimpan…' : 'Buat Transaksi'}
+        {create.isPending ? 'Menyimpan…' : 'Selesaikan Transaksi'}
       </Button>
     </form>
   );

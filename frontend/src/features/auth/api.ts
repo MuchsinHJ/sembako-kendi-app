@@ -8,7 +8,7 @@ export interface LoginData {
 }
 
 /** Pesan pasti dari backend utk kredensial salah (04 §6). */
-export const LOGIN_FAIL_MESSAGE = 'Identitas atau kata sandi tidak cocok. Periksa kembali dan coba lagi.';
+export const LOGIN_FAIL_MESSAGE = 'Email atau kata sandi salah. Periksa kembali lalu coba lagi.';
 
 export function loginApi(input: LoginInput): Promise<LoginData> {
   return apiFetch<LoginData>('/auth/login', {
@@ -45,7 +45,8 @@ export function useLogin() {
   });
 }
 
-export function useLogout() {
+/** Hook logout: POST /auth/logout, lalu kosongkan token; pemanggil wajib reset status auth (AuthProvider.setAuthenticated(null)). */
+export function useLogout(onSettled?: () => void) {
   return useMutation({
     mutationFn: async () => {
       // Backend merevoke refresh cookie; token bersih walau request gagal.
@@ -53,5 +54,6 @@ export function useLogout() {
       setAccessToken(null);
       return true;
     },
+    onSettled: () => onSettled?.(),
   });
 }

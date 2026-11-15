@@ -12,7 +12,8 @@ export const statusProduk = z.enum(['AKTIF', 'NONAKTIF']);
 export const productFormSchema = z
   .object({
     nama: z.string().min(1, 'Nama produk wajib diisi'),
-    kategori: z.string().min(1, 'Kategori wajib dipilih'),
+    // Trim + rapikan spasi agar " Snack " tidak jadi kategori berbeda.
+    kategori: z.string().trim().min(1, 'Kategori wajib dipilih'),
     hargaJual: z.string().refine((v) => Number(v) > 0, 'Harga jual harus lebih dari 0'),
     hargaModal: z.string().min(1, 'Harga modal wajib diisi'),
     stokAwal: z.string().optional(),

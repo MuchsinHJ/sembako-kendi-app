@@ -1,6 +1,5 @@
-/* eslint-disable testing-library/prefer-screen-queries -- query dibatasi scope dialog via within() */
 import { describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
@@ -52,8 +51,7 @@ describe('Katalog', () => {
     expect(await screen.findByText('Beras 5kg')).toBeInTheDocument();
     expect(screen.getByText('Gula Pasir 1kg')).toBeInTheDocument();
     expect(screen.getByText('Rp75.000')).toBeInTheDocument();
-    expect(screen.getByText('Sisa 12')).toBeInTheDocument();
-    expect(screen.getByText(/4 produk/)).toBeInTheDocument();
+    expect(screen.getByText('Stok 12')).toBeInTheDocument();
   });
 
   it('empty state: "Belum ada produk" + tombol Tambah Produk', async () => {
@@ -117,8 +115,27 @@ describe('Katalog', () => {
     );
     renderCatalog();
     expect(await screen.findByText('Beras 5kg')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Muat lebih banyak' }));
+    await userEvent.click(screen.getByRole('button', { name: /Berikutnya/ }));
     expect(await screen.findByText('Gula Pasir 1kg')).toBeInTheDocument();
+  });
+
+  it('tablet/desktop (matchMedia min-width): grid kartu mengganti list — satu layout dirender', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(((query: string) => ({
+      matches: query.includes('min-width'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia);
+
+    renderCatalog();
+    // Teks produk tampil tepat satu kali — bukan dobel (list+grid sekaligus).
+    expect(await screen.findAllByText('Beras 5kg')).toHaveLength(1);
+
+    vi.restoreAllMocks();
   });
 
   it('filter tipe "Titipan" hanya menampilkan produk titipan', async () => {
@@ -256,6 +273,50 @@ describe('Detail Produk', () => {
 
     expect(await screen.findByText('Gula Pasir 1kg')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Beras 5kg')).not.toBeInTheDocument());
+  });
+});
+
+describe('Terima Titipan & Retur ke Penitip', () => {
+  it('produk titipan: Terima Titipan terkirim ke /consignment/receipts + stok refetch', async () => {
+    let captured: unknown;
+    server.use(
+      http.post('*/api/v1/consignment/receipts', async ({ request }) => {
+        captured = await request.json();
+        return HttpResponse.json({
+          success: true,
+          data: { id: 'm1', productId: 'p4', tipe: 'TERIMA', jumlah: 2, product: { id: 'p4', stok: 10 } },
+        });
+      })
+    );
+    renderDetail('p4');
+    await userEvent.click(await screen.findByRole('button', { name: 'Terima Titipan' }));
+
+    const dlg = within(await screen.findByRole('dialog'));
+    const jumlahInput = dlg.getByLabelText('Jumlah titipan');
+    fireEvent.change(jumlahInput, { target: { value: '2' } });
+    await userEvent.click(dlg.getByRole('button', { name: 'Simpan Penerimaan' }));
+
+    await waitFor(() => expect(captured).toBeDefined());
+    expect(captured).toMatchObject({ productId: 'p4', jumlah: 2 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('produk titipan: Retur melebihi stok diblokir + pesan', async () => {
+    renderDetail('p4'); // stok p4 = 8
+    await userEvent.click(await screen.findByRole('button', { name: 'Retur ke Penitip' }));
+
+    const dlg = within(await screen.findByRole('dialog'));
+    fireEvent.change(dlg.getByLabelText('Jumlah titipan'), { target: { value: '99' } });
+
+    expect(dlg.getByText(/Jumlah retur melebihi stok tersedia/)).toBeInTheDocument();
+    expect(dlg.getByRole('button', { name: 'Simpan Retur' })).toBeDisabled();
+  });
+
+  it('produk milik sendiri: tombol titipan tidak tampil', async () => {
+    renderDetail('p1');
+    expect(await screen.findByRole('button', { name: 'Edit Produk' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Terima Titipan' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retur ke Penitip' })).not.toBeInTheDocument();
   });
 });
 

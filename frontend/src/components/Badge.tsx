@@ -5,6 +5,8 @@ export type BadgeVariant = 'lunas' | 'utang' | 'netral';
 interface BadgeProps {
   variant: BadgeVariant;
   label: string;
+  /** Pen: badge status penitip tanpa dot. Default true (R-31: dot pelengkap). */
+  dot?: boolean;
 }
 
 const styles: Record<BadgeVariant, { bg: string; dot: string; text: string }> = {
@@ -13,15 +15,15 @@ const styles: Record<BadgeVariant, { bg: string; dot: string; text: string }> = 
   netral: { bg: 'bg-muted-soft', dot: 'bg-muted', text: 'text-muted' },
 };
 
-/** Badge status — selalu dot + label (warna bukan satu-satunya makna, 02 §3). */
-export function Badge({ variant, label }: BadgeProps) {
+/** Badge status — dot + label (warna bukan satu-satunya makna, 02 §3); `dot={false}` utk badge penitip. */
+export function Badge({ variant, label, dot = true }: BadgeProps) {
   const s = styles[variant];
   return (
     <span
       data-testid={`badge-${variant}`}
       className={cn('inline-flex items-center gap-[5px] rounded-full px-[11px] py-[5px]', s.bg)}
     >
-      <span aria-hidden="true" data-testid="badge-dot" className={cn('size-[5px] shrink-0 rounded-full', s.dot)} />
+      {dot && <span aria-hidden="true" data-testid="badge-dot" className={cn('size-[5px] shrink-0 rounded-full', s.dot)} />}
       <span className={cn('text-[11px] font-semibold leading-none', s.text)}>{label}</span>
     </span>
   );

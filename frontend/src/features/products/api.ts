@@ -5,12 +5,15 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/http';
+import { daftarKategori, type OpsiKategori } from './kategori';
 import type {
   ConsignorOption,
   Product,
   ProductFilters,
   ProductListResult,
   ProductPayload,
+  StatusFilter,
+  TipeFilter,
   UpdateProductPayload,
 } from './types';
 
@@ -23,6 +26,7 @@ export function listProductsApi(
   if (params.search) q.set('search', params.search);
   if (params.status && params.status !== 'SEMUA') q.set('status', params.status);
   if (params.tipe && params.tipe !== 'SEMUA') q.set('tipe', params.tipe);
+  if (params.kategori) q.set('kategori', params.kategori);
   if (params.consignorId) q.set('consignorId', params.consignorId);
   q.set('page', String(params.page));
   q.set('limit', String(params.limit ?? 20));
@@ -38,6 +42,26 @@ export function useProducts(filters: ProductFilters) {
     queryFn: ({ pageParam }) => listProductsApi({ ...filters, page: pageParam }),
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+  });
+}
+
+/**
+ * Daftar kategori dasar tanpa terpengaruh oleh filter kategori aktif.
+ * Mengambil sampel produk berdasarkan status & tipe agar filter kategori tetap lengkap saat dipilih.
+ */
+export function useProductCategories(params?: { status?: StatusFilter; tipe?: TipeFilter }) {
+  return useQuery<OpsiKategori[]>({
+    queryKey: ['product-categories', params?.status ?? 'SEMUA', params?.tipe ?? 'SEMUA'],
+    queryFn: async () => {
+      const res = await listProductsApi({
+        page: 1,
+        limit: 100,
+        status: params?.status,
+        tipe: params?.tipe,
+      });
+      return daftarKategori(res.data.map((p) => p.kategori));
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }
 

@@ -49,7 +49,9 @@ temp/
 *.sqlite3
 
 # ── Dokumen & berkas khusus development (tidak untuk repo) ──────────────────
+.agents/
 .claude/
+agent/
 AGENTS.md
 PROMPTS.md
 PROMPT_*.md

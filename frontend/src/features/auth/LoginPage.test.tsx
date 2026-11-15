@@ -70,7 +70,7 @@ describe('LoginPage — integrasi login', () => {
     await userEvent.click(screen.getByRole('button', { name: /masuk/i }));
 
     expect(
-      await screen.findByText('Identitas atau kata sandi tidak cocok. Periksa kembali dan coba lagi.')
+      await screen.findByText('Email atau kata sandi salah. Periksa kembali lalu coba lagi.')
     ).toBeInTheDocument();
     expect(getAccessToken()).toBeNull();
   });

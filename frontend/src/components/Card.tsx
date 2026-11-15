@@ -9,8 +9,8 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 const variants: Record<NonNullable<CardProps['variant']>, string> = {
   list: 'rounded-card-sm border border-line-soft bg-surface p-3',
   metric: 'rounded-card border border-line-soft bg-surface p-3.5 flex flex-col gap-[3px]',
-  dark: 'rounded-card bg-primary p-4 flex flex-col gap-1',
-  warning: 'rounded-card bg-warning-soft p-4 flex flex-col gap-[7px]',
+  dark: 'rounded-[20px] bg-primary p-3.5 flex flex-col gap-1',
+  warning: 'rounded-[16px] bg-warning-soft p-4 flex flex-col gap-[7px]',
 };
 
 /** Kartu dasar — token saja, tanpa shadow (border untuk struktur). */

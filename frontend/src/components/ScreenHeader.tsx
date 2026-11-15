@@ -33,7 +33,7 @@ export function ScreenHeader({ eyebrow, title, info, onBack, subtitle, action }:
   return (
     <header className="flex flex-col gap-1">
       {eyebrow && (
-        <span className="text-xs font-semibold tracking-[1.2px] text-accent">{eyebrow}</span>
+        <span className="text-xs font-semibold tracking-[1.2px] text-primary-soft">{eyebrow}</span>
       )}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-primary">{title}</h1>

@@ -168,6 +168,7 @@ export const handlers = [
     const url = new URL(request.url);
     const status = url.searchParams.get('status');
     const tipe = url.searchParams.get('tipe');
+    const kategori = url.searchParams.get('kategori');
     const search = url.searchParams.get('search') ?? '';
     const consignorId = url.searchParams.get('consignorId');
     const page = Number(url.searchParams.get('page') ?? '1');
@@ -177,6 +178,7 @@ export const handlers = [
       (p) =>
         (!status || p.status === status) &&
         (!tipe || p.tipe === tipe) &&
+        (!kategori || p.kategori.toLowerCase() === kategori.toLowerCase()) &&
         (!consignorId || p.consignorId === consignorId) &&
         (!search || p.nama.toLowerCase().includes(search.toLowerCase()))
     );

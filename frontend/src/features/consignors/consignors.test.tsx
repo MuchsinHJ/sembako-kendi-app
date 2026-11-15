@@ -65,7 +65,7 @@ describe('Daftar Penitip', () => {
       </MemoryRouter>
     );
     await userEvent.click(await screen.findByRole('button', { name: /bu rina/i }));
-    expect(await screen.findByText('Saldo kewajiban')).toBeInTheDocument();
+    expect(await screen.findByText('Saldo kewajiban ke penitip')).toBeInTheDocument();
   });
 });
 
@@ -73,7 +73,7 @@ describe('Detail Penitip (c1: saldo negatif)', () => {
   it('tampil saldo negatif + info setoran dilarang', async () => {
     renderAt('/penitip/:id', '/penitip/c1', <DetailPenitipPage />);
 
-    expect(await screen.findByText('Saldo kewajiban')).toBeInTheDocument();
+    expect(await screen.findByText('Saldo kewajiban ke penitip')).toBeInTheDocument();
     expect(screen.getByText('-Rp15.000')).toBeInTheDocument();
     expect(screen.getByText(/saldo negatif/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Catat Setoran' })).toBeDisabled();
@@ -81,7 +81,7 @@ describe('Detail Penitip (c1: saldo negatif)', () => {
 
   it('kartu rincian: modal terjual, disetor, 1 produk aktif stok 8', async () => {
     renderAt('/penitip/:id', '/penitip/c1', <DetailPenitipPage />);
-    await screen.findByText('Saldo kewajiban');
+    await screen.findByText('Saldo kewajiban ke penitip');
 
     expect(screen.getByText('Rp40.000')).toBeInTheDocument(); // totalTerjualModal
     expect(screen.getByText('Rp55.000')).toBeInTheDocument(); // totalDisetor
@@ -91,7 +91,7 @@ describe('Detail Penitip (c1: saldo negatif)', () => {
 
   it('Catat Setoran: nominal ≤ 0 diblokir, > saldo tampil error (c2 saldo positif)', async () => {
     renderAt('/penitip/:id', '/penitip/c2', <DetailPenitipPage />);
-    await screen.findByText('Saldo kewajiban');
+    await screen.findByText('Saldo kewajiban ke penitip');
     await userEvent.click(screen.getByRole('button', { name: 'Catat Setoran' }));
 
     const dlg = getDialog();

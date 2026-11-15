@@ -62,7 +62,7 @@ function SetoranModal({
   return (
     <Modal open title="Catat Setoran" onClose={onClose}>
       <div className="mb-4 flex items-center justify-between text-sm">
-        <span className="text-muted">Saldo kewajiban</span>
+        <span className="text-muted">Saldo kewajiban saat ini</span>
         <span className="font-bold text-primary">{formatRupiah(saldo)}</span>
       </div>
       <div className="flex flex-col gap-4">
@@ -148,7 +148,7 @@ function RiwayatSetoranContent({ consignorId }: { consignorId: string }) {
 
   return (
     <>
-      <p className="mb-3 text-xs text-muted">Setoran bersifat append-only — tidak dapat diedit atau dihapus.</p>
+      <p className="mb-3 text-xs text-muted">Riwayat setoran hanya bisa ditambah — tidak dapat diedit atau dihapus.</p>
       {isLoading && <p className="text-sm text-muted">Memuat…</p>}
       {isError && <p className="text-sm text-danger">Gagal memuat riwayat setoran.</p>}
       {!isLoading && !isError && payments.length === 0 && (
@@ -328,7 +328,7 @@ export function DetailPenitipPage() {
         {/* Kiri: saldo + rincian + aksi (06 §5.7) */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <Card variant="dark">
-            <span className="text-xs text-bg/70">Saldo kewajiban</span>
+            <span className="text-xs text-bg/70">Saldo kewajiban ke penitip</span>
             <span className={`text-[28px] font-bold leading-none ${saldoNegatif ? 'text-warning-soft' : 'text-bg'}`}>
               {formatRupiah(balance?.saldo ?? '0')}
             </span>
@@ -337,7 +337,7 @@ export function DetailPenitipPage() {
             </span>
             {saldoNegatif && (
               <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-warning-soft px-3 py-1 text-[11px] font-semibold text-warning">
-                Saldo negatif — kewajiban sudah lebih dari terbayar. Setoran tidak dapat dicatat.
+                Saldo negatif — kewajiban sudah lebih dari terbayar.
               </span>
             )}
           </Card>
@@ -371,6 +371,9 @@ export function DetailPenitipPage() {
             <Button onClick={() => setSetoranOpen(true)} disabled={saldoNegatif}>
               Catat Setoran
             </Button>
+            {saldoNegatif && (
+              <p className="-mt-1 text-xs text-muted">Setoran tidak bisa dicatat selama saldo masih minus.</p>
+            )}
             <Button variant="secondary" onClick={() => setProdukOpen(true)}>
               Lihat Produk Titipan ({consignor.ringkasan.jumlahProdukTitipanAktif})
             </Button>

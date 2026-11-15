@@ -40491,8 +40491,8 @@
     {
       "type": "frame",
       "id": "Jkphl",
-      "x": 18000,
-      "y": 0,
+      "x": 4025,
+      "y": 2786,
       "name": "Tablet",
       "width": 1104,
       "height": 16112,
@@ -53585,8 +53585,8 @@
     {
       "type": "frame",
       "id": "sQcPx",
-      "x": 20000,
-      "y": 0,
+      "x": 6025,
+      "y": 2786,
       "name": "Desktop",
       "width": 1520,
       "height": 17640,

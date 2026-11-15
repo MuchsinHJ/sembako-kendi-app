@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Ban, CalendarDays, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { useTransactions, useVoidTransaction } from '../api';
 import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
@@ -6,8 +7,17 @@ import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SegmentedFilter } from '@/components/SegmentedFilter';
+import { DateRangePicker } from '@/features/reports/components/shared';
 import { formatRupiah } from '@/lib/money';
-import { formatTanggal, hitungSisaVoid } from '../utils';
+import { useMediaQuery } from '@/lib/useMediaQuery';
+import {
+  formatTanggal,
+  formatTanggalLengkap,
+  formatTanggalPendek,
+  hitungSisaVoid,
+  isoToInputValue,
+  judulTransaksi,
+} from '../utils';
 import type { Transaction, PaymentStatus } from '../types';
 
 const STATUS_OPTIONS = [
@@ -54,72 +64,180 @@ function VoidConfirmModal({ transactionId, onClose }: { transactionId: string; o
   );
 }
 
-/** Detail kanan (master-detail md+). */
-function DetailPanel({ t, onVoid }: { t: Transaction; onVoid: (t: Transaction) => void }) {
+/** Tampilan Detail Transaksi lengkap mengikuti pen Q8YY2 / Z6FKk / imcH5 / k4IRS. */
+function TransactionDetailView({
+  t,
+  onVoid,
+}: {
+  t: Transaction;
+  onVoid: (t: Transaction) => void;
+}) {
   const dibatalkan = t.statusTransaksi === 'DIBATALKAN';
   const bisaVoid = !dibatalkan && hitungSisaVoid(t.createdAt);
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-bold text-primary">{formatRupiah(t.total)}</p>
-          <p className="text-xs text-muted">
-            {formatTanggal(t.tanggal)}
-            {t.namaPembeli && ` · ${t.namaPembeli}`}
-          </p>
+    <div className="flex flex-col gap-3">
+      {/* Kartu Identitas (pen: k5j3U) */}
+      <div className="flex items-start justify-between gap-3 rounded-[14px] border border-line-soft bg-surface p-3.5">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13.5px] font-bold text-primary">{t.id}</p>
+          <p className="text-[11.5px] text-muted">{formatTanggalLengkap(t.tanggal)}</p>
         </div>
         {dibatalkan ? (
           <Badge variant="netral" label="Dibatalkan" />
         ) : (
-          <Badge variant={t.statusPembayaran === 'LUNAS' ? 'lunas' : 'utang'} label={t.statusPembayaran === 'LUNAS' ? 'Lunas' : 'Utang'} />
+          <Badge
+            variant={t.statusPembayaran === 'LUNAS' ? 'lunas' : 'utang'}
+            label={t.statusPembayaran === 'LUNAS' ? 'Lunas' : 'Utang'}
+          />
         )}
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        {t.items.map((i) => (
-          <div key={i.productId} className="flex items-center justify-between border-b border-line-soft pb-1.5 last:border-0">
-            <span className="text-sm text-primary">
-              {i.namaProdukSnapshot} ×{i.jumlah}
-            </span>
-            <span className="text-sm font-semibold text-primary">{formatRupiah(i.subtotal)}</span>
-          </div>
-        ))}
+      {/* Kartu Item Transaksi (pen: LdswT) */}
+      <div className="flex flex-col gap-2.5 rounded-[14px] border border-line-soft bg-surface p-3.5">
+        <h3 className="text-[13px] font-bold text-primary">Item transaksi</h3>
+        <div className="flex flex-col gap-2">
+          {t.items.map((i) => (
+            <div
+              key={i.id || i.productId}
+              className="flex items-center justify-between border-b border-line-soft pb-2 last:border-0 last:pb-0"
+            >
+              <div className="min-w-0 flex-1 pr-2">
+                <p className="truncate text-[13.5px] font-medium text-primary">
+                  {i.namaProdukSnapshot}
+                </p>
+                <p className="text-[11.5px] text-muted">
+                  {i.jumlah} × {formatRupiah(i.hargaJualSnapshot)}
+                </p>
+              </div>
+              <span className="shrink-0 text-[13.5px] font-semibold tabular-nums text-primary">
+                {formatRupiah(i.subtotal)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {!dibatalkan && t.statusPembayaran === 'LUNAS' && t.kembalian && (
+      {/* Kartu Pembayaran (pen: N5lJ6V) */}
+      <div className="flex flex-col gap-2.5 rounded-[14px] border border-line-soft bg-surface p-3.5">
+        <h3 className="text-[13px] font-bold text-primary">Pembayaran</h3>
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">Kembalian</span>
-          <span className="font-semibold text-primary">{formatRupiah(t.kembalian)}</span>
+          <span className="text-muted">Total transaksi</span>
+          <span className="font-bold tabular-nums text-primary">{formatRupiah(t.total)}</span>
         </div>
-      )}
-      {!dibatalkan && t.statusPembayaran === 'UTANG' && t.sisaSaldoUtang && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted">Sisa utang</span>
-          <span className="font-semibold text-warning">{formatRupiah(t.sisaSaldoUtang)}</span>
+          <span className="text-muted">Uang diterima</span>
+          <span className="font-semibold tabular-nums text-primary">
+            {formatRupiah(t.uangDiterima || t.total)}
+          </span>
+        </div>
+        <div className="h-px bg-line-soft" />
+        {!dibatalkan && t.statusPembayaran === 'LUNAS' && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-primary-soft">Kembalian</span>
+            <span className="font-bold tabular-nums text-primary-soft">
+              {formatRupiah(t.kembalian || 0)}
+            </span>
+          </div>
+        )}
+        {!dibatalkan && t.statusPembayaran === 'UTANG' && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-warning">Sisa utang</span>
+            <span className="font-bold tabular-nums text-warning">
+              {formatRupiah(t.sisaSaldoUtang || 0)}
+            </span>
+          </div>
+        )}
+        {dibatalkan && (
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Status transaksi</span>
+              <span className="font-semibold text-muted">Dibatalkan</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Status pembayaran</span>
+              <span className="font-semibold text-primary">
+                {t.statusPembayaran === 'LUNAS' ? 'Lunas' : 'Utang'}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Kartu Data Pembeli (pen: O7pfaZ) */}
+      {(t.namaPembeli || t.noHpPembeli) && (
+        <div className="flex flex-col gap-2 rounded-[14px] border border-line-soft bg-surface p-3.5">
+          <h3 className="text-[13px] font-bold text-primary">Data pembeli</h3>
+          {t.namaPembeli && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Nama</span>
+              <span className="font-semibold text-primary">{t.namaPembeli}</span>
+            </div>
+          )}
+          {t.noHpPembeli && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">No. HP</span>
+              <span className="font-semibold tabular-nums text-primary">{t.noHpPembeli}</span>
+            </div>
+          )}
         </div>
       )}
 
+      {/* Aksi Pembatalan & Catatan (pen: jfwT7, imcH5, k4IRS) */}
       {bisaVoid && (
-        <Button variant="destructive" className="h-11 px-4 text-xs" onClick={() => onVoid(t)}>
-          Batalkan Transaksi
-        </Button>
+        <div className="flex flex-col gap-2 pt-1">
+          <Button
+            variant="destructive"
+            className="h-11 w-full gap-2 px-4 text-xs font-semibold"
+            onClick={() => onVoid(t)}
+          >
+            <Ban className="size-4" aria-hidden="true" />
+            <span>Batalkan Transaksi</span>
+          </Button>
+          <p className="text-center text-[11.5px] text-muted">
+            Pembatalan bisa dilakukan maksimal 24 jam setelah transaksi disimpan.
+          </p>
+        </div>
+      )}
+
+      {!dibatalkan && !bisaVoid && (
+        <div className="flex items-start gap-2.5 rounded-[12px] border border-line-soft bg-surface p-3 text-xs text-muted">
+          <Info className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
+          <p>
+            Pembatalan hanya bisa dilakukan maksimal 24 jam setelah transaksi disimpan. Transaksi ini
+            sudah melewati batas pembatalan 24 jam.
+          </p>
+        </div>
+      )}
+
+      {dibatalkan && (
+        <div className="flex items-start gap-2.5 rounded-[12px] border border-line-soft bg-surface p-3 text-xs text-muted">
+          <Info className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
+          <p>
+            Transaksi dibatalkan
+            {t.dibatalkanPada ? ` pada ${formatTanggal(t.dibatalkanPada)}` : ''}. Stok sudah
+            dikembalikan dan transaksi ini tidak dihitung dalam omzet maupun profit.
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
-/** Layar Riwayat (03) — mobile: daftar; md+: master-detail (±42/58). */
+/** Layar Riwayat (03) — mobile: daftar + layar detail interaktif; md+: master-detail (±42/58). */
 export function RiwayatPage() {
   const [status, setStatus] = useState<StatusFilter>('SEMUA');
   const [voidFor, setVoidFor] = useState<Transaction | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const isLg = useMediaQuery('(min-width: 1024px)');
 
   // Rentang default dihitung sekali per mount agar query key stabil.
-  const [range] = useState(() => {
+  const [range, setRange] = useState(() => {
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
   });
+  const [rangeOpen, setRangeOpen] = useState(false);
 
   const filters = {
     ...range,
@@ -131,9 +249,46 @@ export function RiwayatPage() {
   const transactions = data?.pages.flatMap((p) => p.data) ?? [];
   const selected = transactions.find((t) => t.id === selectedId) ?? null;
 
+  // Pada mobile: bila ada transaksi yang dipilih, tampilkan layar Detail Transaksi interaktif (pen Q8YY2 / Z6FKk)
+  if (!isLg && selected) {
+    return (
+      <div className="flex flex-col gap-4">
+        <ScreenHeader
+          title="Detail Transaksi"
+          subtitle={selected.id}
+          onBack={() => setSelectedId(null)}
+        />
+        <TransactionDetailView t={selected} onVoid={setVoidFor} />
+        {voidFor && <VoidConfirmModal transactionId={voidFor.id} onClose={() => setVoidFor(null)} />}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <ScreenHeader eyebrow="RIWAYAT" title="Riwayat Transaksi" info="30 hari terakhir" />
+      {/* Pen: judul "Transaksi", info "<N> transaksi ditemukan" */}
+      <ScreenHeader
+        eyebrow="RIWAYAT"
+        title="Transaksi"
+        info={transactions.length > 0 ? `${transactions.length} transaksi ditemukan` : undefined}
+      />
+
+      {/* Kartu Rentang Tanggal (pen: h=52, radius 14, surface, ikon kalender + blok label/nilai + chevron) */}
+      <button
+        type="button"
+        aria-label="Ubah rentang tanggal"
+        onClick={() => setRangeOpen(true)}
+        className="press-scale flex h-[52px] w-full items-center gap-2.5 rounded-segment border border-line-soft bg-surface px-3.5 text-left transition-colors duration-150 ease-out hover:border-accent/60 hover:bg-surface-muted"
+      >
+        <CalendarDays className="size-[18px] shrink-0 text-primary-soft" aria-hidden="true" />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-[11.5px] font-semibold text-muted">Rentang Tanggal</span>
+          <span className="truncate text-[13.5px] font-semibold text-primary">
+            {formatTanggalPendek(range.startDate)} – {formatTanggalPendek(range.endDate)}
+          </span>
+        </span>
+        <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden="true" />
+      </button>
 
       <SegmentedFilter
         label="Status pembayaran"
@@ -160,9 +315,15 @@ export function RiwayatPage() {
       )}
 
       {!isLoading && !isError && transactions.length === 0 && (
-        <Card variant="list" className="flex flex-col items-center gap-1 py-10 text-center">
+        <Card variant="list" className="flex flex-col items-center gap-2 py-10 text-center">
           <p className="text-sm font-semibold text-primary">Tidak ada transaksi</p>
-          <p className="text-xs text-muted">Tidak ada transaksi pada rentang 30 hari terakhir.</p>
+          <p className="text-xs text-muted">
+            Tidak ada transaksi pada rentang {formatTanggalPendek(range.startDate)} –{' '}
+            {formatTanggalPendek(range.endDate)}. Coba ubah rentang tanggal atau pilih status pembayaran lain.
+          </p>
+          <Button variant="secondary" className="h-10 px-4 text-xs" onClick={() => setRangeOpen(true)}>
+            Ubah Rentang Tanggal
+          </Button>
         </Card>
       )}
 
@@ -178,42 +339,67 @@ export function RiwayatPage() {
                 <Card
                   key={t.id}
                   variant="list"
-                  className={`flex flex-col gap-2 lg:cursor-pointer ${aktif ? 'border-accent' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={aktif}
+                  aria-label={`Transaksi ${t.id}, ${formatRupiah(t.total)}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedId(t.id);
+                    }
+                  }}
+                  className={`press-scale card-hover flex cursor-pointer flex-col gap-2 rounded-[14px] ${aktif ? 'border-accent' : ''}`}
                   onClick={() => setSelectedId(t.id)}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-primary">
-                        {t.items.map((i) => `${i.namaProdukSnapshot} ×${i.jumlah}`).join(', ')}
+                  {/* Baris atas: Judul deskriptif nama pembeli / produk, waktu + ID di bawahnya, badge kanan */}
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-[13.5px] font-bold ${dibatalkan ? 'text-muted line-through' : 'text-primary'}`}>
+                        {judulTransaksi(t)}
                       </p>
-                      <p className="text-xs text-muted">
-                        {formatTanggal(t.tanggal)}
-                        {t.namaPembeli && ` · ${t.namaPembeli}`}
+                      <p className="flex items-center gap-1.5 truncate text-[11.5px] text-muted">
+                        <span className="font-semibold text-primary-soft">{t.id}</span>
+                        <span>·</span>
+                        <span>{formatTanggal(t.tanggal)}</span>
                       </p>
                     </div>
                     {dibatalkan ? (
                       <Badge variant="netral" label="Dibatalkan" />
                     ) : (
-                      <Badge variant={t.statusPembayaran === 'LUNAS' ? 'lunas' : 'utang'} label={t.statusPembayaran === 'LUNAS' ? 'Lunas' : 'Utang'} />
+                      <Badge
+                        variant={t.statusPembayaran === 'LUNAS' ? 'lunas' : 'utang'}
+                        label={t.statusPembayaran === 'LUNAS' ? 'Lunas' : 'Utang'}
+                      />
                     )}
                   </div>
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="text-xs text-muted">Total</p>
-                      <p className="text-lg font-bold text-primary">{formatRupiah(t.total)}</p>
-                      {t.statusPembayaran === 'LUNAS' && t.kembalian && (
-                        <p className="text-xs text-muted">Kembalian {formatRupiah(t.kembalian)}</p>
-                      )}
-                      {t.statusPembayaran === 'UTANG' && t.sisaSaldoUtang && (
-                        <p className="text-xs text-warning">Sisa utang {formatRupiah(t.sisaSaldoUtang)}</p>
-                      )}
-                    </div>
-                    {bisaVoid && (
-                      <Button variant="destructive" className="h-11 px-4 text-xs lg:hidden" onClick={() => setVoidFor(t)}>
-                        Batalkan
-                      </Button>
-                    )}
+
+                  {/* Baris bawah: ringkasan item kiri, total + chevron kanan */}
+                  <div className="flex items-end justify-between gap-2.5">
+                    <p className="min-w-0 flex-1 truncate text-xs text-muted">
+                      {t.items.length} produk · {t.items.reduce((s, i) => s + i.jumlah, 0)} item
+                      {dibatalkan ? ' · Stok dikembalikan' : ''}
+                    </p>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span className={`text-[15px] font-bold ${dibatalkan ? 'text-muted' : 'text-primary'}`}>
+                        {formatRupiah(t.total)}
+                      </span>
+                      <ChevronRight className="size-4 text-muted" aria-hidden="true" />
+                    </span>
                   </div>
+
+                  {bisaVoid && (
+                    <Button
+                      variant="destructive"
+                      className="h-11 self-start px-4 text-xs lg:hidden"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setVoidFor(t);
+                      }}
+                    >
+                      Batalkan
+                    </Button>
+                  )}
                 </Card>
               );
             })}
@@ -229,7 +415,7 @@ export function RiwayatPage() {
           <div className="hidden flex-1 lg:block">
             <div className="sticky top-6 rounded-card border border-line-soft bg-surface p-5">
               {selected ? (
-                <DetailPanel t={selected} onVoid={setVoidFor} />
+                <TransactionDetailView t={selected} onVoid={setVoidFor} />
               ) : (
                 <p className="py-8 text-center text-sm text-muted">Pilih transaksi untuk melihat detail.</p>
               )}
@@ -239,6 +425,18 @@ export function RiwayatPage() {
       )}
 
       {voidFor && <VoidConfirmModal transactionId={voidFor.id} onClose={() => setVoidFor(null)} />}
+
+      {rangeOpen && (
+        <Modal open title="Rentang Tanggal" onClose={() => setRangeOpen(false)}>
+          <DateRangePicker
+            range={{ startDate: isoToInputValue(range.startDate), endDate: isoToInputValue(range.endDate) }}
+            onChange={(r) => {
+              setRange({ startDate: new Date(`${r.startDate}T00:00:00`).toISOString(), endDate: new Date(`${r.endDate}T23:59:59`).toISOString() });
+              setRangeOpen(false);
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

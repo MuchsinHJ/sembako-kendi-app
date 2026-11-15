@@ -15,27 +15,26 @@ function renderHome() {
 }
 
 describe('Beranda', () => {
-  it('menampilkan metrik, peringatan stok menipis & transaksi terakhir', async () => {
+  it('menampilkan omzet, metrik, penitip, stok menipis & kartu laporan', async () => {
     renderHome();
 
     expect(await screen.findByText('Omzet Hari Ini')).toBeInTheDocument();
     expect(screen.getByText('Estimasi Profit')).toBeInTheDocument();
     expect(screen.getByText('Total Utang Aktif')).toBeInTheDocument();
-    expect(screen.getByText('Kewajiban Penitip')).toBeInTheDocument();
+    expect(screen.getByText('Penitip & Kewajiban')).toBeInTheDocument();
 
-    expect(screen.getByText('Peringatan Stok Menipis')).toBeInTheDocument();
+    expect(screen.getByText('Stok Menipis')).toBeInTheDocument();
     expect(screen.getByText('Gula Pasir 1kg')).toBeInTheDocument();
-    expect(screen.getByText('Menipis')).toBeInTheDocument();
 
-    expect(screen.getByText('Transaksi Terakhir')).toBeInTheDocument();
-    expect(screen.getByText('Rp75.000')).toBeInTheDocument();
-    expect(screen.getByText(/Pak Budi/)).toBeInTheDocument();
+    expect(screen.getByText('Laporan')).toBeInTheDocument();
+    expect(screen.getByText('Beranda')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keluar' })).toBeInTheDocument();
   });
 
-  it('tautan katalog & riwayat menavigasi', async () => {
+  it('tautan laporan, penitip & utang menavigasi', async () => {
     renderHome();
     await screen.findByText('Omzet Hari Ini');
-    expect(screen.getByRole('button', { name: 'Lihat Katalog' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Lihat Riwayat/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Laporan/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Penitip & Kewajiban/ })).toBeInTheDocument();
   });
 });

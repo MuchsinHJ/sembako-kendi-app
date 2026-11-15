@@ -37,6 +37,8 @@ export interface ProductFilters {
   search?: string;
   status?: StatusFilter;
   tipe?: TipeFilter;
+  /** Filter kategori (pencocokan case-insensitive di backend). */
+  kategori?: string;
   /** Filter titipan per penitip (backend `GET /products?consignorId=`). */
   consignorId?: string;
   /** Batas halaman (default backend 20; POS minta 100). */

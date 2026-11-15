@@ -109,7 +109,11 @@ export const listProducts = async (
   const where: Prisma.ProductWhereInput = {};
 
   if (kategori) {
-    where.kategori = kategori;
+    where.kategori = {
+      equals: kategori,
+      // Kategori teks bebas — "snack" dan "Snack" harus cocok satu filter.
+      mode: 'insensitive',
+    };
   }
 
   if (status) {

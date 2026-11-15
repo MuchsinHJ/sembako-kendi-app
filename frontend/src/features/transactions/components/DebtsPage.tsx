@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download } from 'lucide-react';
+import { ChevronRight, Download } from 'lucide-react';
 import { useDebts, usePaymentHistory, useRecordPayment } from '../api';
 import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
@@ -146,7 +146,7 @@ function DetailPanel({ transaction, onSelesai }: { transaction: Transaction; onS
   );
 }
 
-/** Layar Utang (SDD §15.1 DIKUNCI: per transaksi). Mobile: daftar; md+: master-detail + ringkasan. */
+/** Layar Utang (pen gRhkJ) — mobile: daftar; md+: master-detail + ringkasan. */
 export function DebtsPage() {
   const navigate = useNavigate();
   const [paymentFor, setPaymentFor] = useState<Transaction | null>(null);
@@ -159,18 +159,21 @@ export function DebtsPage() {
   const selected = debts.find((t) => t.id === selectedId) ?? null;
 
   return (
-    <div className="flex flex-col gap-4">
-      <ScreenHeader eyebrow="UTANG" title="Utang" info={debts.length > 0 ? `${debts.length} transaksi utang aktif` : undefined} />
+    <div className="flex flex-col gap-3">
+      {/* Pen: judul "Utang Pelanggan", sub "N transaksi belum lunas" */}
+      <ScreenHeader
+        eyebrow="UTANG"
+        title="Utang Pelanggan"
+        info={debts.length > 0 ? `${debts.length} transaksi belum lunas` : undefined}
+      />
 
-      <Card variant="metric" className="flex-row items-center justify-between">
+      {/* Kartu Ringkasan (pen Q2MLSM): r=16, p=16, g=3 */}
+      <Card variant="list" className="flex-row items-center justify-between rounded-[16px] p-4">
         <div className="flex flex-col gap-[3px]">
-          <span className="text-xs text-muted">Total saldo utang aktif</span>
-          <span className="text-[28px] font-bold leading-none text-warning">{formatRupiah(String(totalSaldo))}</span>
+          <span className="text-xs text-muted">Total utang aktif</span>
+          <span className="text-[26px] font-bold leading-tight text-primary">{formatRupiah(String(totalSaldo))}</span>
+          <span className="text-[11.5px] text-muted">Jumlah sisa utang dari seluruh transaksi</span>
         </div>
-        <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => navigate('/laporan/utang')}>
-          <Download className="size-4" aria-hidden="true" />
-          Ekspor Laporan Utang
-        </Button>
       </Card>
 
       {isLoading && (
@@ -207,29 +210,44 @@ export function DebtsPage() {
                 <Card
                   key={t.id}
                   variant="list"
-                  className={`flex flex-col gap-2 lg:cursor-pointer ${aktif ? 'border-accent' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={aktif}
+                  aria-label={`Utang ${t.namaPembeli ?? 'Tanpa nama'}, sisa ${formatRupiah(t.sisaSaldoUtang)}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedId(t.id);
+                    }
+                  }}
+                  className={`press-scale card-hover flex cursor-pointer flex-col gap-2 rounded-[14px] ${aktif ? 'border-accent' : ''}`}
                   onClick={() => setSelectedId(t.id)}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  {/* Baris atas (pen): nama + ID·waktu kiri, badge kanan */}
+                  <div className="flex items-center justify-between gap-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-primary">{t.namaPembeli ?? 'Tanpa nama'}</p>
-                      <p className="text-xs text-muted">{formatTanggal(t.tanggal)}</p>
+                      <p className="truncate text-[13px] font-bold text-primary">{t.namaPembeli ?? 'Tanpa nama'}</p>
+                      <p className="truncate text-[11.5px] text-muted">
+                        {t.id} · {formatTanggal(t.tanggal)}
+                      </p>
                     </div>
                     <Badge variant="utang" label="Utang" />
                   </div>
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="text-xs text-muted">Sisa utang</p>
-                      <p className="text-lg font-bold text-warning">{formatRupiah(t.sisaSaldoUtang)}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="icon" aria-label="Riwayat cicilan" onClick={() => setHistoryFor(t)}>
-                        ≡
-                      </Button>
-                      <Button className="h-11 px-4 text-xs lg:hidden" onClick={() => setPaymentFor(t)}>
-                        Catat Pembayaran
-                      </Button>
-                    </div>
+                  {/* Baris bawah (pen): label sisa kiri, nilai + chevron kanan */}
+                  <div className="flex items-center justify-between gap-2.5">
+                    <p className="text-xs text-muted">Sisa utang</p>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-[15px] font-bold text-danger">{formatRupiah(t.sisaSaldoUtang)}</span>
+                      <ChevronRight className="size-4 text-muted" aria-hidden="true" />
+                    </span>
+                  </div>
+                  <div className="flex gap-2 lg:hidden">
+                    <Button variant="icon" aria-label="Riwayat cicilan" onClick={(e) => { e.stopPropagation(); setHistoryFor(t); }}>
+                      ≡
+                    </Button>
+                    <Button className="h-11 flex-1 px-4 text-xs" onClick={(e) => { e.stopPropagation(); setPaymentFor(t); }}>
+                      Catat Pembayaran
+                    </Button>
                   </div>
                 </Card>
               );
@@ -239,6 +257,18 @@ export function DebtsPage() {
               <Button variant="secondary" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="self-center">
                 {isFetchingNextPage ? 'Memuat…' : 'Muat lebih banyak'}
               </Button>
+            )}
+
+            {/* Tombol Ekspor (pen GCyUJ): pill surface r=999, h=46 */}
+            {debts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => navigate('/laporan/utang')}
+                className="press-scale flex h-[46px] w-full items-center justify-center gap-2 rounded-full bg-surface text-[13.5px] font-semibold text-primary transition-colors duration-150 ease-out hover:bg-surface-muted"
+              >
+                <Download className="size-4 text-primary" aria-hidden="true" />
+                Ekspor Laporan Utang
+              </button>
             )}
           </div>
 

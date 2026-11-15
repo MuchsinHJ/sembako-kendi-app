@@ -12,10 +12,11 @@ export function ChipFilter({ active = false, className, ...props }: ChipFilterPr
       type="button"
       aria-pressed={active}
       className={cn(
-        'h-10 shrink-0 rounded-full px-4 text-xs whitespace-nowrap',
+        'press-scale h-11 shrink-0 rounded-full px-4 text-xs whitespace-nowrap',
+        'transition-colors duration-150 ease-out',
         active
           ? 'bg-primary font-semibold text-bg'
-          : 'border border-line bg-surface font-medium text-primary-soft',
+          : 'border border-line bg-surface font-medium text-primary-soft hover:border-accent/60 hover:bg-surface-muted',
         className
       )}
       {...props}

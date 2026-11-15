@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useConsignors } from '../api';
+import { useConsignors, useConsignorBalance } from '../api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Badge } from '@/components/Badge';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SearchField } from '@/components/SearchField';
 import { ChipFilter } from '@/components/ChipFilter';
+import { formatRupiah } from '@/lib/money';
 import type { ConsignorFilters, ConsignorStatus } from '../types';
 
 /** Filter sisi klien Semua/Aktif/Nonaktif; `punyaSaldo` dikirim ke server. */
@@ -24,37 +25,40 @@ function filterToParams(f: ListFilter): ConsignorFilters {
   return {};
 }
 
-function inisial(nama: string): string {
-  return nama
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((k) => k[0])
-    .join('')
-    .toUpperCase();
-}
-
-/** Kartu grid penitip (06 §5.7) — inisial + nama + noHP + badge status. */
-function ConsignorCard({ nama, noHp, status, onClick }: { nama: string; noHp: string | null; status: ConsignorStatus; onClick: () => void }) {
+/** Kartu penitip (pen LXNAb): r=14, p=12, g=8. Atas: nama 14.5/600 + noHP + badge. Bawah: saldo kiri + nilai 14/700.
+ *  Deviasi: pen menampilkan "N produk titipan aktif" di kiri bawah; API daftar (`GET /consignors`)
+ *  tidak menyertakan ringkasan titipan (hanya endpoint detail), jadi label diganti "Saldo kewajiban". */
+function ConsignorCard({ id, nama, noHp, catatan, status, onClick }: {
+  id: string;
+  nama: string;
+  noHp: string | null;
+  catatan: string | null;
+  status: ConsignorStatus;
+  onClick: () => void;
+}) {
+  const { data: balance } = useConsignorBalance(id);
   return (
     <button
       type="button"
       onClick={onClick}
-      className="press-scale flex flex-col items-start gap-2.5 rounded-card border border-line-soft bg-surface p-4 text-left focus:outline-none focus:ring-2 focus:ring-accent/40"
+      className="press-scale card-hover flex flex-col gap-2 rounded-[14px] border border-line-soft bg-surface p-3 text-left focus:outline-none focus:ring-2 focus:ring-accent/40"
     >
-      <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-primary">
-        {inisial(nama)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-primary">{nama}</p>
-        <p className="truncate text-xs text-muted">{noHp ?? 'Tanpa no. HP'}</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[14.5px] font-semibold text-primary">{nama}</p>
+          <p className="truncate text-xs text-muted">{noHp ?? catatan ?? 'Tanpa no. HP'}</p>
+        </div>
+        <Badge variant={status === 'NONAKTIF' ? 'netral' : 'lunas'} label={status === 'NONAKTIF' ? 'Nonaktif' : 'Aktif'} dot={false} />
       </div>
-      {status === 'NONAKTIF' && <Badge variant="netral" label="Nonaktif" />}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11.5px] text-muted">Saldo kewajiban</span>
+        <span className="text-[14px] font-bold text-primary">{formatRupiah(balance?.saldo ?? '0')}</span>
+      </div>
     </button>
   );
 }
 
-/** Layar Daftar Penitip (03; 06 §5.7 grid 2/3 kolom). */
+/** Layar Daftar Penitip (pen): list vertikal — identitas+badge, baris produk+saldo. */
 export function DaftarPenitipPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<ListFilter>('SEMUA');
@@ -107,9 +111,17 @@ export function DaftarPenitipPage() {
       )}
 
       {!isLoading && !isError && consignors.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:gap-[18px]">
+        <div className="flex flex-col gap-2.5">
           {consignors.map((c) => (
-            <ConsignorCard key={c.id} nama={c.nama} noHp={c.noHp} status={c.status} onClick={() => navigate(`/penitip/${c.id}`)} />
+            <ConsignorCard
+              key={c.id}
+              id={c.id}
+              nama={c.nama}
+              noHp={c.noHp}
+              catatan={c.catatan}
+              status={c.status}
+              onClick={() => navigate(`/penitip/${c.id}`)}
+            />
           ))}
         </div>
       )}

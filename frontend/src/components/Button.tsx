@@ -21,10 +21,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(
         'press-scale inline-flex items-center justify-center gap-[7px] rounded-full font-semibold',
         'whitespace-nowrap select-none disabled:cursor-not-allowed disabled:opacity-50',
-        variant === 'primary' && 'h-12 bg-primary px-6 text-sm text-bg',
-        variant === 'secondary' && 'h-12 border border-line bg-surface px-6 text-sm text-primary',
-        variant === 'destructive' && 'h-12 border border-danger bg-surface px-6 text-sm text-danger',
-        variant === 'icon' && 'h-11 w-11 border border-line bg-surface text-primary',
+        // Hover: latar/border berubah 150ms ease-out; dijeda di perangkat sentuh oleh Tailwind 4 (hover: → @media (hover:hover))
+        'transition-[background-color,border-color,color,transform] duration-150 ease-out',
+        variant === 'primary' && 'h-12 bg-primary px-6 text-sm text-bg hover:bg-primary-soft',
+        variant === 'secondary' && 'h-12 border border-line bg-surface px-6 text-sm text-primary hover:border-accent/60 hover:bg-surface-muted',
+        variant === 'destructive' && 'h-12 border border-danger bg-surface px-6 text-sm text-danger hover:bg-danger/10',
+        variant === 'icon' && 'h-11 w-11 border border-line bg-surface text-primary hover:border-accent/60 hover:bg-surface-muted',
         className
       )}
       {...props}

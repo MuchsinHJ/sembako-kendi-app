@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { renderWithProviders } from '@/test/helpers';
 import { BottomNav } from './BottomNav';
 import { SidebarNav } from './SidebarNav';
 
+// SidebarNav kini memakai useAuth/useLogout — render lewat provider (auth + query client).
 function renderNav(ui: React.ReactElement, initial = '/') {
-  return render(<MemoryRouter initialEntries={[initial]}>{ui}</MemoryRouter>);
+  return renderWithProviders(
+    <MemoryRouter initialEntries={[initial]}>{ui}</MemoryRouter>
+  );
 }
 
 function getAside() {
@@ -27,6 +31,14 @@ describe('BottomNav (mobile)', () => {
   it('item aktif menandai aria-current', () => {
     renderNav(<BottomNav />, '/produk');
     expect(screen.getByRole('link', { name: 'Produk' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Beranda' })).not.toHaveAttribute('aria-current');
+    // FAB Transaksi tidak aktif di halaman lain
+    expect(screen.getByRole('link', { name: 'Transaksi' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('FAB Transaksi aktif di /transaksi', () => {
+    renderNav(<BottomNav />, '/transaksi');
+    expect(screen.getByRole('link', { name: 'Transaksi' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Beranda' })).not.toHaveAttribute('aria-current');
   });
 
