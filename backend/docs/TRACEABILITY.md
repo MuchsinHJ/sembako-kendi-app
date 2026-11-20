@@ -188,10 +188,10 @@ Modul: **Consignment** (`src/modules/consignment/`). Dua router: `/consignors` (
 | NFR-01 | Waktu muat < 2 detik (dashboard, katalog, form) | Index database, query optimization | Manual perf test |
 | NFR-02 | Handle 200 transaksi/hari tanpa degradasi | PM2 cluster mode, connection pooling | Load test (manual) |
 | NFR-03 | Koneksi internet diperlukan saat transaksi | Tidak ada offline mode di MVP | — |
-| NFR-04 | Data tersimpan di server, tidak hilang saat device rusak | PostgreSQL + backup harian | Prosedur backup di `README_NEW.md`, cron job |
+| NFR-04 | Data tersimpan di server, tidak hilang saat device rusak | PostgreSQL + backup harian | Prosedur backup di `README.md`, cron job |
 | NFR-05 | Password di-hash (bcrypt) | `auth.service.ts`, `prisma/seed.ts`, `scripts/reset-password.ts` (`config.BCRYPT_SALT_ROUNDS`) | `auth.test.ts`, `env.test.ts` |
 | NFR-06 | Mekanisme reset password via admin | `npm run reset-password -- <email> <password>` | Manual |
-| NFR-07 | Backup data minimal harian | Prosedur `pg_dump` + crontab di `README_NEW.md` | Manual |
+| NFR-07 | Backup data minimal harian | Prosedur `pg_dump` + crontab di `README.md` | Manual |
 | NFR-08 | Support browser modern Android/iOS (Chrome, Safari) | CORS, standard REST API | Manual browser test |
 | NFR-09 | Bahasa Indonesia | Response message, error message | Semua test |
 

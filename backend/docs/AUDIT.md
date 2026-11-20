@@ -543,15 +543,15 @@ npm run test -- --coverage
 |------|--------|-------------|
 | Build production berhasil | ✅ | `npm run build` |
 | PM2 ecosystem config | ✅ | `ecosystem.config.js` |
-| README deployment guide | ✅ | `backend/README_NEW.md` (§Build & Production Deployment) |
-| Nginx reverse proxy config | ✅ | `backend/README_NEW.md` §Konfigurasi Nginx |
-| Environment variables documented | ✅ | `backend/.env.example` + `backend/README_NEW.md` §Environment Variables Reference |
+| README deployment guide | ✅ | `backend/README.md` (§Build & Production Deployment) |
+| Nginx reverse proxy config | ✅ | `backend/README.md` §Konfigurasi Nginx |
+| Environment variables documented | ✅ | `backend/.env.example` + `backend/README.md` §Environment Variables Reference |
 | Database migration strategy | ✅ | `npm run migrate:deploy` — 6 migration: `init`, `check_constraints`, `stock_adjustment`, `uang_diterima_kembalian`, `add_consignment_stage1`, `add_consignment_stage2` (dua terakhir aditif, aman untuk data lama) |
-| Backup script & cron job | ✅ | `backend/README_NEW.md` §Database Backup (skrip `pg_dump` + entri crontab; salinan skrip perlu dibuat di server saat deploy) |
+| Backup script & cron job | ✅ | `backend/README.md` §Database Backup (skrip `pg_dump` + entri crontab; salinan skrip perlu dibuat di server saat deploy) |
 | Cleanup orphan photos script | ✅ | `scripts/cleanup-orphan-photos.ts` |
-| Smoke test production | ✅ | `GET /api/v1/health` + `README_NEW.md` §Verifikasi |
+| Smoke test production | ✅ | `GET /api/v1/health` + `README.md` §Verifikasi |
 | Trust proxy configuration | ✅ | `src/app.ts` / `server.ts` |
-| SSL/TLS setup guide | ✅ | `backend/README_NEW.md` §Konfigurasi Nginx |
+| SSL/TLS setup guide | ✅ | `backend/README.md` §Konfigurasi Nginx |
 
 **Status:** ✅ Production-ready
 
@@ -567,13 +567,13 @@ npm run test -- --coverage
 3. **85% Service Layer Coverage:** Melampaui target >= 80%.
 4. **Security Compliant:** Seluruh praktik keamanan SDD telah diimplementasikan; semua `$queryRaw` memakai tagged template / `Prisma.sql` (parameterized).
 5. **Performance Target Met:** AC-13 (laporan < 5s) dan AC-17 (dashboard < 3s) passed.
-6. **Deployment Documentation Complete:** `README_NEW.md`, `ecosystem.config.js`, konfigurasi Nginx, prosedur backup & cleanup, semuanya tersedia dan terdokumentasi.
+6. **Deployment Documentation Complete:** `README.md`, `ecosystem.config.js`, konfigurasi Nginx, prosedur backup & cleanup, semuanya tersedia dan terdokumentasi.
 7. **Integritas kewajiban penitip:** saldo **diturunkan** (bukan disimpan) sehingga void otomatis mengoreksi kewajiban; concurrency setoran diuji dengan row lock (SDD §11.12, §6.9).
 
 **Next Steps:**
 1. Setup production environment (PostgreSQL, Cloudflare R2 bucket)
 2. Configure environment variables di production server (salin dari `.env.example`)
-3. Deploy mengikuti 7 langkah di `backend/README_NEW.md`
+3. Deploy mengikuti 7 langkah di `backend/README.md`
 4. Jalankan `npm run migrate:deploy` (6 migration, termasuk 2 migration konsinyasi)
 5. Setup cron jobs untuk backup & cleanup
 6. Configure SSL/TLS dengan Let's Encrypt
