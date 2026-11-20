@@ -32,9 +32,11 @@ const STATUS_OPTIONS = [
 
 type StatusFilter = (typeof STATUS_OPTIONS)[number]['value'];
 
+/** 30 hari terakhir dengan batas hari penuh, agar transaksi baru hari ini tetap masuk. */
 function rentangDefault() {
-  const endDate = new Date();
-  const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+  const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   return { startDate: startDate.toISOString(), endDate: endDate.toISOString() };
 }
 

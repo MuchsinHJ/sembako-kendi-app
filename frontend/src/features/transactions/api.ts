@@ -60,6 +60,8 @@ export function useCreateTransaction() {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['products'] });
       qc.invalidateQueries({ queryKey: ['consignors'] });
+      // Omzet, profit, tren, utang & konsinyasi berubah setelah transaksi dibuat/dibatalkan.
+      qc.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 }
@@ -80,6 +82,8 @@ export function useVoidTransaction(id: string) {
       qc.invalidateQueries({ queryKey: ['debts'] });
       qc.invalidateQueries({ queryKey: ['products'] });
       qc.invalidateQueries({ queryKey: ['consignors'] });
+      // Omzet, profit, tren, utang & konsinyasi berubah setelah transaksi dibuat/dibatalkan.
+      qc.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 }
@@ -134,6 +138,7 @@ export function useRecordPayment(transactionId: string) {
       qc.invalidateQueries({ queryKey: ['debts'] });
       qc.invalidateQueries({ queryKey: ['transactions', transactionId] });
       qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] });
+      qc.invalidateQueries({ queryKey: ['reports'] });
     },
   });
 }

@@ -172,6 +172,7 @@ export function useCreateConsignorPayment(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['consignors', id, 'balance'] });
       qc.invalidateQueries({ queryKey: ['consignors', id, 'payments'] });
+      qc.invalidateQueries({ queryKey: ['reports', 'consignment'] });
       qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] });
     },
   });

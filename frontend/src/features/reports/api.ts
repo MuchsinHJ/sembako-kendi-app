@@ -3,8 +3,21 @@ import { apiFetch } from '@/lib/http';
 import type { DebtReport, ProductTrend, ReportRange, SalesReport } from './types';
 import type { ConsignmentReport } from '@/features/consignors/types';
 
+/**
+ * Ubah rentang `YYYY-MM-DD` (tanggal lokal) menjadi batas hari penuh dalam ISO.
+ * Backend memakai `new Date(endDate)` + `lte`; tanggal polos dibaca sebagai 00.00 UTC
+ * (07.00 WIB), sehingga transaksi hari terakhir setelah jam 7 pagi ikut terbuang.
+ */
+export function toApiRange(range: ReportRange): ReportRange {
+  return {
+    startDate: new Date(`${range.startDate}T00:00:00`).toISOString(),
+    endDate: new Date(`${range.endDate}T23:59:59.999`).toISOString(),
+  };
+}
+
 function rangeQuery(range: ReportRange): string {
-  return new URLSearchParams({ startDate: range.startDate, endDate: range.endDate }).toString();
+  const r = toApiRange(range);
+  return new URLSearchParams({ startDate: r.startDate, endDate: r.endDate }).toString();
 }
 
 // ─── GET /reports/sales ───────────────────────────────────────────────────────
@@ -68,10 +81,17 @@ export function useConsignmentReport(range: ReportRange) {
  */
 export async function exportReportApi(
   resource: 'sales' | 'debts',
-  range: ReportRange & { format: 'xlsx' | 'pdf' }
+  range: ReportRange & { format: 'xlsx' | 'pdf' },
 ) {
-  const params = new URLSearchParams({ startDate: range.startDate, endDate: range.endDate, format: range.format });
-  const res = await apiFetch<Response>(`/reports/${resource}/export?${params.toString()}`, { raw: true });
+  const apiRange = toApiRange(range);
+  const params = new URLSearchParams({
+    startDate: apiRange.startDate,
+    endDate: apiRange.endDate,
+    format: range.format,
+  });
+  const res = await apiFetch<Response>(`/reports/${resource}/export?${params.toString()}`, {
+    raw: true,
+  });
   const blob = await res.blob();
 
   // Fallback nama file bila header Content-Disposition tidak tersedia.
