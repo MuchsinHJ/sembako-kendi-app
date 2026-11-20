@@ -17,11 +17,12 @@ const styles: Record<BadgeVariant, { bg: string; dot: string; text: string }> = 
 
 /** Badge status — dot + label (warna bukan satu-satunya makna, 02 §3); `dot={false}` utk badge penitip. */
 export function Badge({ variant, label, dot = true }: BadgeProps) {
+  // Pen badge status penitip (tanpa dot) memakai padding [3,10]; badge transaksi [5,11].
   const s = styles[variant];
   return (
     <span
       data-testid={`badge-${variant}`}
-      className={cn('inline-flex items-center gap-[5px] rounded-full px-[11px] py-[5px]', s.bg)}
+      className={cn('inline-flex shrink-0 items-center gap-[5px] rounded-full', dot ? 'px-[11px] py-[5px]' : 'px-2.5 py-[3px]', s.bg)}
     >
       {dot && <span aria-hidden="true" data-testid="badge-dot" className={cn('size-[5px] shrink-0 rounded-full', s.dot)} />}
       <span className={cn('text-[11px] font-semibold leading-none', s.text)}>{label}</span>

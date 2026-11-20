@@ -700,6 +700,37 @@ const consignorHandlers = [
     return HttpResponse.json({ success: true, data: paginate(list, page, limit) });
   }),
 
+  http.post('*/api/v1/consignors', async ({ request }) => {
+    const body = (await request.json()) as { nama: string; noHp?: string | null; catatan?: string | null };
+    const id = `c${consignors.length + 1}`;
+    const newConsignor: FixtureConsignor = {
+      id,
+      nama: body.nama,
+      noHp: body.noHp ?? null,
+      catatan: body.catatan ?? null,
+      status: 'AKTIF',
+      createdAt: now,
+      updatedAt: now,
+    };
+    consignors = [...consignors, newConsignor];
+    balanceFixtures[id] = { consignorId: id, totalTerjualModal: '0.00', totalDisetor: '0.00', saldo: '0.00' };
+    return HttpResponse.json({ success: true, data: { ...newConsignor, ringkasan: { jumlahProdukTitipanAktif: 0, totalStokTitipan: 0 } } }, { status: 201 });
+  }),
+
+  http.put('*/api/v1/consignors/:id', async ({ params, request }) => {
+    const c = consignors.find((x) => x.id === params.id);
+    if (!c) return consignorNotFound();
+    const body = (await request.json()) as { nama?: string; noHp?: string | null; catatan?: string | null };
+    const updated = {
+      ...c,
+      ...(body.nama ? { nama: body.nama } : {}),
+      ...(body.noHp !== undefined ? { noHp: body.noHp } : {}),
+      ...(body.catatan !== undefined ? { catatan: body.catatan } : {}),
+    };
+    consignors = consignors.map((x) => (x.id === c.id ? updated : x));
+    return HttpResponse.json({ success: true, data: { ...updated, ringkasan: ringkasan(c.id) } });
+  }),
+
   http.get('*/api/v1/consignors/:id', ({ params }) => {
     const c = consignors.find((x) => x.id === params.id);
     if (!c) return consignorNotFound();

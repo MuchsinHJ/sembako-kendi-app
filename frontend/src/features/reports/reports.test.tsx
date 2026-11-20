@@ -31,12 +31,12 @@ describe('Laporan Penjualan', () => {
     expect(omzet.length).toBeGreaterThanOrEqual(1);
 
     // Per tipe
-    expect(screen.getByText('Rincian per tipe produk')).toBeInTheDocument();
+    expect(screen.getByText('Rincian per Tipe Produk')).toBeInTheDocument();
 
     // Tren produk terlaris
-    expect(screen.getByText('Produk terlaris')).toBeInTheDocument();
+    expect(screen.getByText(/Produk Terlaris/)).toBeInTheDocument();
     expect(screen.getByText('Beras 5kg')).toBeInTheDocument();
-    expect(screen.getByText('Sembako · 3 terjual')).toBeInTheDocument();
+    expect(screen.getByText('3 terjual')).toBeInTheDocument();
     expect(screen.getByText('Rp225.000')).toBeInTheDocument();
 
     // Daftar transaksi
@@ -58,7 +58,7 @@ describe('Laporan Penjualan', () => {
     renderAt('/laporan/penjualan', '/laporan/penjualan', <LaporanPenjualanPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Transaksi')).toBeInTheDocument();
+      expect(screen.getByText('Rata-rata / Transaksi')).toBeInTheDocument();
     });
   });
 
@@ -72,6 +72,7 @@ describe('Laporan Penjualan', () => {
     renderAt('/laporan/penjualan', '/laporan/penjualan', <LaporanPenjualanPage />);
     await screen.findAllByText('Rp111.000');
 
+    await userEvent.click(screen.getByRole('button', { name: 'Ekspor Laporan' }));
     await userEvent.click(screen.getByRole('button', { name: /excel/i }));
 
     await waitFor(() => {
@@ -118,6 +119,7 @@ describe('Laporan Utang', () => {
     expect(screen.getByText('Rp21.000')).toBeInTheDocument();
     expect(screen.getByText(/Cicilan/)).toBeInTheDocument();
     expect(screen.getByText(/Rp15\.000 · sisa Rp21\.000/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ekspor Laporan Utang' }));
     expect(screen.getByRole('button', { name: /excel/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pdf/i })).toBeInTheDocument();
   });

@@ -1,51 +1,47 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Download, Wallet } from 'lucide-react';
 import { useDebtReport, exportReportApi } from '../api';
-import { DateRangePicker, ExportButtons, SummaryStat } from './shared';
+import { ExportSheet, PeriodFilter } from './shared';
 import { useDefaultMonthRange } from '../utils';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Badge } from '@/components/Badge';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { formatRupiah } from '@/lib/money';
-import { formatTanggal } from '@/features/transactions/utils';
+import {
+  formatTanggalPendek,
+  formatWaktuRelatif,
+  kodeTransaksi,
+} from '@/features/transactions/utils';
 
-/** Laporan Utang: ringkasan + daftar utang + riwayat cicilan + ekspor. */
+/**
+ * Laporan Utang (tambahan; pola visual mengikuti layar Utang gRhkJ + sheet Ekspor t4kIz):
+ * periode · total saldo · daftar utang + cicilan · ekspor xlsx/pdf.
+ */
 export function LaporanUtangPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useState(useDefaultMonthRange());
-  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
-
+  const defaultRange = useDefaultMonthRange();
+  const [range, setRange] = useState(defaultRange);
+  const [exportOpen, setExportOpen] = useState(false);
   const { data, isLoading, isError, refetch } = useDebtReport(range);
 
-  async function onExport(format: 'xlsx' | 'pdf') {
-    setExporting(format);
-    try {
-      await exportReportApi('debts', { ...range, format });
-    } catch {
-      // Gagal unduh.
-    } finally {
-      setExporting(null);
-    }
-  }
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <ScreenHeader
-        onBack={() => navigate('/laporan/penjualan')}
-        title="Utang"
-        subtitle="Laporan utang periode"
+        onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/utang'))}
+        title="Laporan Utang"
+        subtitle="Utang pelanggan per periode"
       />
 
-      <DateRangePicker range={range} onChange={setRange} />
+      <PeriodFilter range={range} onChange={setRange} defaultRange={defaultRange} />
 
       {isLoading && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="h-24 animate-pulse rounded-card border border-line-soft bg-surface" />
-            <div className="h-24 animate-pulse rounded-card border border-line-soft bg-surface" />
-          </div>
-          <div className="h-52 animate-pulse rounded-card border border-line-soft bg-surface" />
+        <div className="flex flex-col gap-2.5" aria-busy="true">
+          <div className="h-[96px] animate-pulse rounded-[16px] bg-surface" />
+          {[0, 1].map((i) => (
+            <div key={i} className="h-[78px] animate-pulse rounded-[14px] bg-surface" />
+          ))}
         </div>
       )}
 
@@ -60,34 +56,66 @@ export function LaporanUtangPage() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <SummaryStat label="Total saldo utang" value={formatRupiah(data.totalSaldoUtang)} accent />
-            <SummaryStat label="Jumlah utang" value={String(data.debtCount)} />
+          {/* Kartu ringkasan (pola pen Kartu Ringkasan Utang) */}
+          <div className="flex flex-col gap-[3px] rounded-[16px] bg-surface p-4">
+            <span className="text-xs text-muted">Total saldo utang periode</span>
+            <span className="text-[26px] font-bold leading-tight tabular-nums text-primary">
+              {formatRupiah(data.totalSaldoUtang)}
+            </span>
+            <span className="text-[11.5px] text-muted">
+              <span className="font-semibold text-primary-soft">{data.debtCount}</span> transaksi
+              utang pada periode ini
+            </span>
           </div>
 
-          <ExportButtons downloading={exporting !== null} onExport={onExport} />
-
-          <Card variant="list" className="flex flex-col gap-2">
-            {data.debts.length === 0 ? (
-              <p className="text-xs text-muted">Tidak ada utang pada periode ini.</p>
-            ) : (
-              data.debts.map((d) => (
-                <div key={d.id} className="flex flex-col gap-1.5 border-b border-line-soft py-2.5 last:border-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-primary">{d.namaPembeli}</p>
-                      <p className="text-xs text-muted">
-                        {formatTanggal(d.tanggal)} · {d.id}
-                      </p>
+          {data.debts.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-[16px] bg-surface px-5 py-10 text-center">
+              <div className="flex size-[72px] items-center justify-center rounded-full bg-surface-muted">
+                <Wallet className="size-[30px] text-accent" aria-hidden="true" />
+              </div>
+              <p className="text-lg font-bold text-primary">Tidak ada utang</p>
+              <p className="max-w-[280px] text-[13px] text-muted">
+                Tidak ada transaksi utang pada periode ini.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {data.debts.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex flex-col gap-2 rounded-[14px] border border-line-soft bg-surface p-3"
+                >
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-[13px] font-bold text-primary">
+                        {d.namaPembeli}
+                      </span>
+                      <span className="truncate text-[11.5px] text-muted">
+                        {kodeTransaksi(d)} · {formatWaktuRelatif(d.tanggal)}
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-warning">{formatRupiah(d.sisaSaldoUtang)}</span>
+                    <Badge
+                      variant={Number(d.sisaSaldoUtang) > 0 ? 'utang' : 'lunas'}
+                      label={Number(d.sisaSaldoUtang) > 0 ? 'Utang' : 'Lunas'}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2.5">
+                    <span className="text-xs text-muted">Sisa utang</span>
+                    <span className="text-[15px] font-bold tabular-nums text-danger">
+                      {formatRupiah(d.sisaSaldoUtang)}
+                    </span>
                   </div>
                   {d.payments.length > 0 && (
-                    <div className="flex flex-col gap-1 border-t border-line-soft pt-1.5">
+                    <div className="flex flex-col gap-1 rounded-[10px] bg-surface-muted px-2.5 py-2">
                       {d.payments.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between text-xs">
-                          <span className="text-muted">Cicilan {formatTanggal(p.tanggalBayar)}</span>
-                          <span className="font-medium text-primary">
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between gap-2 text-[11.5px]"
+                        >
+                          <span className="text-muted">
+                            Cicilan {formatTanggalPendek(p.tanggalBayar)}
+                          </span>
+                          <span className="font-semibold tabular-nums text-primary">
                             {formatRupiah(p.jumlahBayar)} · sisa {formatRupiah(p.saldoSetelahBayar)}
                           </span>
                         </div>
@@ -95,17 +123,29 @@ export function LaporanUtangPage() {
                     </div>
                   )}
                 </div>
-              ))
-            )}
-          </Card>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="secondary"
+            className="h-[46px] w-full text-[13.5px]"
+            onClick={() => setExportOpen(true)}
+          >
+            <Download className="size-4" aria-hidden="true" />
+            Ekspor Laporan Utang
+          </Button>
         </>
       )}
 
-      <div className="flex">
-        <Button variant="secondary" onClick={() => navigate('/laporan/penjualan')}>
-          <ArrowLeft className="size-4" aria-hidden="true" /> Kembali ke Penjualan
-        </Button>
-      </div>
+      <ExportSheet
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Ekspor Laporan Utang"
+        range={range}
+        filePrefix="laporan-utang"
+        onExport={(format) => exportReportApi('debts', { ...range, format })}
+      />
     </div>
   );
 }

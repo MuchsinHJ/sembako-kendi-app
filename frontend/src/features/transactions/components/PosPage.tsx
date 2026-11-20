@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Package, Plus, ShoppingBasket } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useProductCategories, useProducts } from '@/features/products/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
@@ -8,44 +8,82 @@ import { ChipFilter } from '@/components/ChipFilter';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SearchField } from '@/components/SearchField';
 import { formatRupiah } from '@/lib/money';
+import { formatTanggalPanjang } from '@/lib/date';
+import { ApiError } from '@/lib/http';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from '@/lib/useMediaQuery';
-import { daftarKategori, gabungKategori, type OpsiKategori } from '@/features/products/kategori';
+import { daftarKategori, gabungKategori } from '@/features/products/kategori';
+import { useCreateTransaction } from '../api';
 import { CartForm } from './CartForm';
-import { CartModal } from './CartModal';
-import type { CartItem } from '../types';
+import { BerhasilStep, KeranjangStep, KonfirmasiStep } from './PosCheckout';
+import { ringkasItem, totalKeranjang } from '../utils';
+import type { CartItem, Transaction } from '../types';
 import type { Product } from '@/features/products/types';
 
-/** Baris produk POS mobile (pen TO213): thumb 44×44 + nama + harga·stok + tombol + bulat 44×44. */
-function ProductRow({ product, cart, onChange }: { product: Product; cart: Map<string, CartItem>; onChange: (p: Product, q: number) => void }) {
-  const inCart = cart.get(product.id);
+type Langkah = 'pilih' | 'keranjang' | 'konfirmasi' | 'berhasil';
+const LANGKAH: readonly Langkah[] = ['pilih', 'keranjang', 'konfirmasi', 'berhasil'];
+
+/**
+ * Baris produk POS mobile (pen Produk - Beras Ramos 5 kg): h56 p6 gap10 surface r14,
+ * thumb 44 r10 · nama 14/600 + harga 13/700 · stok 12 · tombol + 44 surface-muted.
+ * Tombol + berubah primary bila produk sudah di keranjang (umpan balik tambahan).
+ */
+function ProductRow({
+  product,
+  qty,
+  onChange,
+}: {
+  product: Product;
+  qty: number;
+  onChange: (p: Product, q: number) => void;
+}) {
+  const habis = qty >= product.stok;
   return (
-    <div className="flex items-center gap-2.5 rounded-[14px] bg-surface p-1.5">
+    <div className="flex h-14 items-center gap-2.5 rounded-[14px] bg-surface p-1.5">
       <Link
         to={`/produk/${product.id}`}
-        className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-surface-muted"
+        className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-surface-muted"
         aria-label={`Lihat ${product.nama}`}
       >
         {product.fotoUrl ? (
-          <img src={product.fotoUrl} alt="" className="size-full rounded-[10px] object-cover" />
+          <img
+            src={product.fotoUrl}
+            alt=""
+            className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10"
+          />
         ) : (
           <Package className="size-[18px] text-primary-soft" aria-hidden="true" />
         )}
       </Link>
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-px">
         <p className="truncate text-sm font-semibold text-primary">{product.nama}</p>
         <div className="flex items-baseline gap-1.5">
-          <span className="text-[13px] font-bold text-primary">{formatRupiah(product.hargaJual)}</span>
-          <span className="text-xs text-muted">Stok {product.stok}</span>
+          <span className="text-[13px] font-bold tabular-nums text-primary">
+            {formatRupiah(product.hargaJual)}
+          </span>
+          <span
+            className={cn(
+              'text-xs',
+              product.stok <= product.stokMinimum ? 'text-warning' : 'text-muted',
+            )}
+          >
+            {product.stok === 0 ? 'Stok habis' : `Stok ${product.stok}`}
+          </span>
+          {qty > 0 && (
+            <span className="text-xs font-semibold text-primary-soft">· {qty} di keranjang</span>
+          )}
         </div>
       </div>
       <button
         type="button"
         aria-label={`Tambah ${product.nama}`}
-        onClick={() => onChange(product, (inCart?.qty ?? 0) + 1)}
+        disabled={habis}
+        onClick={() => onChange(product, qty + 1)}
         className={cn(
-          'press-scale flex size-11 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out',
-          inCart ? 'bg-primary text-bg' : 'bg-surface-muted text-primary hover:bg-accent-soft'
+          'press-scale flex size-11 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40',
+          qty > 0
+            ? 'bg-primary text-bg'
+            : 'bg-surface-muted text-primary enabled:hover:bg-muted-soft',
         )}
       >
         <Plus className="size-[18px]" aria-hidden="true" />
@@ -55,32 +93,46 @@ function ProductRow({ product, cart, onChange }: { product: Product; cart: Map<s
 }
 
 /** Kartu produk POS md+ (canvas uGvXh): gambar besar + nama + harga + stok + tombol + bulat. */
-function ProductCard({ product, cart, onChange }: { product: Product; cart: Map<string, CartItem>; onChange: (p: Product, q: number) => void }) {
-  const inCart = cart.get(product.id);
+function ProductCard({
+  product,
+  qty,
+  onChange,
+}: {
+  product: Product;
+  qty: number;
+  onChange: (p: Product, q: number) => void;
+}) {
   return (
     <div className="flex flex-col gap-2 rounded-[16px] border border-line-soft bg-surface p-3">
       <Link
         to={`/produk/${product.id}`}
-        className="flex aspect-[4/3] items-center justify-center rounded-card-sm bg-surface-muted"
+        className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-card-sm bg-surface-muted"
         aria-label={`Lihat ${product.nama}`}
       >
         {product.fotoUrl ? (
-          <img src={product.fotoUrl} alt="" className="size-full rounded-card-sm object-cover" />
+          <img src={product.fotoUrl} alt="" className="size-full object-cover" />
         ) : (
           <Package className="size-10 text-accent" aria-hidden="true" />
         )}
       </Link>
-      <p className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-primary">{product.nama}</p>
-      <p className="text-[15px] font-bold tabular-nums text-primary">{formatRupiah(product.hargaJual)}</p>
+      <p className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-primary">
+        {product.nama}
+      </p>
+      <p className="text-[15px] font-bold tabular-nums text-primary">
+        {formatRupiah(product.hargaJual)}
+      </p>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted">Stok {product.stok}</span>
         <button
           type="button"
           aria-label={`Tambah ${product.nama}`}
-          onClick={() => onChange(product, (inCart?.qty ?? 0) + 1)}
+          disabled={qty >= product.stok}
+          onClick={() => onChange(product, qty + 1)}
           className={cn(
-            'press-scale flex size-11 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out',
-            inCart ? 'bg-primary text-bg' : 'bg-surface-muted text-primary hover:bg-accent-soft'
+            'press-scale flex size-11 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40',
+            qty > 0
+              ? 'bg-primary text-bg'
+              : 'bg-surface-muted text-primary enabled:hover:bg-accent-soft',
           )}
         >
           <Plus className="size-[18px]" aria-hidden="true" />
@@ -90,19 +142,35 @@ function ProductCard({ product, cart, onChange }: { product: Product; cart: Map<
   );
 }
 
-/** Layar POS (pen TO213) — mobile: daftar + bar keranjang; md+: dua panel (produk | keranjang selalu tampil). */
+/**
+ * Layar POS. Mobile = alur 4 langkah (pen TO213 → p6iFM → NOO66/Iz4Nr → maq6j/lhvUF),
+ * langkah disimpan di `?langkah=` agar tombol kembali peramban berfungsi.
+ * md+: dua panel (produk | keranjang selalu tampil, canvas uGvXh / O7bvH).
+ */
 export function PosPage() {
+  const isMd = useMediaQuery('(min-width: 768px)');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const langkahParam = searchParams.get('langkah') as Langkah | null;
+  const langkah: Langkah =
+    !isMd && langkahParam && LANGKAH.includes(langkahParam) ? langkahParam : 'pilih';
+
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [cart, setCart] = useState<Map<string, CartItem>>(new Map());
-  const [cartOpen, setCartOpen] = useState(false);
+  const [uang, setUang] = useState('');
+  const [namaPembeli, setNamaPembeli] = useState('');
+  const [noHp, setNoHp] = useState('');
+  const [namaError, setNamaError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [hasil, setHasil] = useState<Transaction | null>(null);
   const [page, setPage] = useState(1);
   const [lihatSemuaProduk, setLihatSemuaProduk] = useState(false);
   const [memuatSemua, setMemuatSemua] = useState(false);
   const [katAktif, setKatAktif] = useState('SEMUA');
-  // Panel kiri: list mobile (pen TO213); grid 2 kolom tablet / 3 kolom desktop (uGvXh / O7bvH).
-  const isMd = useMediaQuery('(min-width: 768px)');
   const pageSize = 12;
+  const create = useCreateTransaction();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(search), 250);
@@ -113,6 +181,28 @@ export function PosPage() {
     setPage(1);
     setLihatSemuaProduk(false);
   }, [debounced, katAktif]);
+
+  const cartItems = [...cart.values()];
+  const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
+  const cartTotal = totalKeranjang(cartItems);
+
+  // Penjaga langkah: keranjang/konfirmasi butuh isi, berhasil butuh hasil transaksi.
+  useEffect(() => {
+    const butuhIsi =
+      (langkah === 'keranjang' || langkah === 'konfirmasi') && cart.size === 0 && !hasil;
+    const tanpaHasil = langkah === 'berhasil' && !hasil;
+    if (butuhIsi || tanpaHasil) setSearchParams({}, { replace: true });
+  }, [langkah, cart.size, hasil, setSearchParams]);
+
+  function keLangkah(next: Langkah) {
+    setSearchParams({ langkah: next }, { state: { posStep: true } });
+  }
+
+  function kembali() {
+    if ((location.state as { posStep?: boolean } | null)?.posStep) navigate(-1);
+    else
+      setSearchParams(langkah === 'konfirmasi' ? { langkah: 'keranjang' } : {}, { replace: true });
+  }
 
   const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useProducts({
@@ -154,43 +244,132 @@ export function PosPage() {
   function setQty(product: Product, qty: number) {
     setCart((prev) => {
       const next = new Map(prev);
-      if (qty <= 0) next.delete(product.id);
-      else next.set(product.id, { product, qty });
+      // Validasi stok di klien (backend tetap sumber kebenaran).
+      const capped = Math.min(qty, product.stok);
+      if (capped <= 0) next.delete(product.id);
+      else next.set(product.id, { product, qty: capped });
       return next;
     });
   }
 
-  const cartItems = [...cart.values()];
-  const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
-  const cartTotal = cartItems.reduce((s, i) => s + Number(i.product.hargaJual) * i.qty, 0);
+  function simpanTransaksi() {
+    setFormError(null);
+    const uangNumber = Number(uang || '0');
+    const utang = uangNumber < cartTotal;
+    if (utang && !namaPembeli.trim()) {
+      setNamaError('Nama pembeli wajib diisi untuk transaksi utang.');
+      return;
+    }
+    setNamaError(null);
+    create.mutate(
+      {
+        items: cartItems.map((i) => ({ productId: i.product.id, jumlah: i.qty })),
+        uangDiterima: uangNumber,
+        ...(namaPembeli.trim() ? { namaPembeli: namaPembeli.trim() } : {}),
+        noHpPembeli: noHp.trim() || null,
+      },
+      {
+        onSuccess: (t) => {
+          setHasil(t);
+          setCart(new Map());
+          setSearchParams({ langkah: 'berhasil' }, { replace: true });
+        },
+        onError: (err: unknown) =>
+          setFormError(
+            err instanceof ApiError ? err.message : 'Gagal menyimpan transaksi. Coba lagi.',
+          ),
+      },
+    );
+  }
+
+  function transaksiBaru() {
+    setHasil(null);
+    setUang('');
+    setNamaPembeli('');
+    setNoHp('');
+    setNamaError(null);
+    setFormError(null);
+    setSearchParams({}, { replace: true });
+  }
 
   const products = lihatSemuaProduk
     ? allLoadedProducts
-    : data?.pages[page - 1]?.data ?? data?.pages[0]?.data ?? [];
+    : (data?.pages[page - 1]?.data ?? data?.pages[0]?.data ?? []);
 
   // Daftar kategori dasar (produk aktif, tidak terpengaruh saat salah satu kategori dipilih).
   const { data: baseCategories = [] } = useProductCategories({ status: 'AKTIF' });
-  const [kategoriList, setKategoriList] = useState<OpsiKategori[]>([]);
+  const kategoriList = useMemo(() => {
+    const fromLoaded = daftarKategori(
+      (data?.pages.flatMap((p) => p.data) ?? []).map((p) => p.kategori),
+    );
+    return gabungKategori(baseCategories, fromLoaded);
+  }, [baseCategories, data?.pages]);
 
-  useEffect(() => {
-    const fromLoaded = daftarKategori(allLoadedProducts.map((p) => p.kategori));
-    setKategoriList(gabungKategori(baseCategories, fromLoaded));
-  }, [baseCategories, allLoadedProducts]);
+  /* ── Langkah mobile setelah pilih produk ── */
+  if (langkah === 'keranjang' && cart.size > 0) {
+    return (
+      <KeranjangStep
+        cart={cartItems}
+        uang={uang}
+        onUang={setUang}
+        onQty={setQty}
+        onBack={kembali}
+        onLanjut={() => keLangkah('konfirmasi')}
+      />
+    );
+  }
+  if (langkah === 'konfirmasi' && cart.size > 0) {
+    return (
+      <KonfirmasiStep
+        cart={cartItems}
+        uang={uang}
+        namaPembeli={namaPembeli}
+        noHp={noHp}
+        onNama={(v) => {
+          setNamaPembeli(v);
+          if (namaError && v.trim()) setNamaError(null);
+        }}
+        onNoHp={setNoHp}
+        namaError={namaError}
+        formError={formError}
+        busy={create.isPending}
+        onBack={kembali}
+        onSimpan={simpanTransaksi}
+      />
+    );
+  }
+  if (langkah === 'berhasil' && hasil) {
+    return (
+      <BerhasilStep
+        transaksi={hasil}
+        onTransaksiBaru={transaksiBaru}
+        onBeranda={() => navigate('/')}
+      />
+    );
+  }
 
   return (
-    <div className="flex min-h-[calc(100dvh-88px)] flex-col">
-      <div className="flex flex-1 flex-col gap-3 p-1 pt-0 md:flex-row md:items-start md:gap-6 md:p-4">
-        {/* Panel kiri: produk */}
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+    <div className={cn('flex flex-col', cartCount > 0 && 'pb-[74px] md:pb-0')}>
+      <div className="flex flex-1 flex-col gap-2.5 md:flex-row md:items-start md:gap-6 md:p-4">
+        {/* Panel kiri: produk (pen Grup Pilih Produk gap 10) */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
           <ScreenHeader
             eyebrow="TRANSAKSI"
             title="Transaksi Baru"
-            info={products.length > 0 ? `${products.length} produk` : undefined}
+            info={formatTanggalPanjang(new Date())}
           />
-          <SearchField value={search} onChange={setSearch} placeholder="Cari nama produk" />
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Cari nama atau kategori produk"
+          />
 
-          {/* Filter kategori (pen TO213 Idi4M) — seluruh kategori tetap ada saat salah satu dipilih */}
-          <div role="group" aria-label="Filter kategori" className="flex flex-wrap gap-2">
+          {/* Filter kategori (pen Filter Kategori): chip 44 gap 8, satu baris geser */}
+          <div
+            role="group"
+            aria-label="Filter kategori"
+            className="chip-scroller -mx-5 flex gap-2 overflow-x-auto px-5 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+          >
             <ChipFilter active={katAktif === 'SEMUA'} onClick={() => setKatAktif('SEMUA')}>
               Semua
             </ChipFilter>
@@ -207,7 +386,7 @@ export function PosPage() {
           </div>
 
           {isLoading && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" aria-busy="true">
               {Array.from({ length: 6 }, (_, i) => (
                 <div key={i} className="h-14 animate-pulse rounded-[14px] bg-surface" />
               ))}
@@ -217,60 +396,105 @@ export function PosPage() {
           {isError && (
             <Card variant="warning" className="items-start">
               <p className="text-sm font-semibold text-warning">Gagal memuat produk.</p>
-              <Button variant="secondary" className="mt-1 h-10 px-4 text-xs" onClick={() => refetch()}>
+              <Button
+                variant="secondary"
+                className="mt-1 h-10 px-4 text-xs"
+                onClick={() => refetch()}
+              >
                 Coba lagi
               </Button>
             </Card>
           )}
 
           {!isLoading && !isError && products.length === 0 && (
-            <Card variant="list" className="flex flex-col items-center gap-2 py-10 text-center">
-              <p className="text-sm font-semibold text-primary">
-                {debounced || katAktif !== 'SEMUA' ? 'Tidak ada produk yang cocok.' : 'Belum ada produk aktif.'}
+            <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
+              <div className="flex size-[72px] items-center justify-center rounded-full bg-surface-muted">
+                <Package className="size-[30px] text-primary-soft" aria-hidden="true" />
+              </div>
+              <p className="text-lg font-semibold text-primary">
+                {debounced || katAktif !== 'SEMUA'
+                  ? 'Produk tidak ditemukan'
+                  : 'Belum ada produk aktif'}
               </p>
-              <p className="text-xs text-muted">
-                {hasNextPage ? 'Muat halaman berikutnya untuk melihat lebih banyak produk.' : 'Aktifkan produk di Katalog untuk bertransaksi.'}
+              <p className="max-w-[280px] text-[13px] leading-normal text-muted">
+                {debounced || katAktif !== 'SEMUA'
+                  ? 'Coba kata kunci atau kategori lain.'
+                  : 'Aktifkan atau tambahkan produk di Katalog supaya bisa dipilih saat mencatat transaksi.'}
               </p>
-              {hasNextPage && (
-                <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => void goNextPage()} disabled={isFetchingNextPage}>
-                  {isFetchingNextPage ? 'Memuat…' : 'Muat produk lainnya'}
-                </Button>
-              )}
-            </Card>
+            </div>
           )}
 
           {!isLoading && !isError && products.length > 0 && (
             <>
-              <p className="text-[12.5px] font-medium text-muted">
-                {products.length} produk · {totalProducts} total{hasNextPage ? ' · lebih banyak tersedia' : ''}
-              </p>
+              {/* Baris Label Daftar (pen): h18 — "Produk aktif" 12.5/500 · jumlah 12 */}
+              <div className="flex h-[18px] items-center justify-between">
+                <span className="text-[12.5px] font-medium text-muted">Produk aktif</span>
+                <span className="text-xs text-muted">{totalProducts} produk</span>
+              </div>
               {isMd ? (
                 <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-3">
                   {products.map((p) => (
-                    <ProductCard key={p.id} product={p} cart={cart} onChange={setQty} />
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      qty={cart.get(p.id)?.qty ?? 0}
+                      onChange={setQty}
+                    />
                   ))}
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
                   {products.map((p) => (
-                    <ProductRow key={p.id} product={p} cart={cart} onChange={setQty} />
+                    <ProductRow
+                      key={p.id}
+                      product={p}
+                      qty={cart.get(p.id)?.qty ?? 0}
+                      onChange={setQty}
+                    />
                   ))}
                 </div>
               )}
-              {!lihatSemuaProduk && hasNextPage && (
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                  <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => void goNextPage()} disabled={isFetchingNextPage}>
-                    {isFetchingNextPage ? 'Memuat…' : `Muat 12 produk lainnya`}
+              {!lihatSemuaProduk && (hasNextPage || page < (data?.pages.length ?? 0)) && (
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <Button
+                    variant="secondary"
+                    className="h-11 px-4 text-xs"
+                    onClick={() => void goNextPage()}
+                    disabled={isFetchingNextPage}
+                  >
+                    {isFetchingNextPage ? 'Memuat…' : 'Muat produk lainnya'}
                   </Button>
-                  <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => void loadAllProducts()} disabled={memuatSemua || isFetchingNextPage}>
+                  <Button
+                    variant="secondary"
+                    className="h-11 px-4 text-xs"
+                    onClick={() => void loadAllProducts()}
+                    disabled={memuatSemua || isFetchingNextPage}
+                  >
                     {memuatSemua ? 'Memuat semua…' : `Lihat semua (${totalProducts})`}
                   </Button>
                 </div>
               )}
+              {page > 1 && !lihatSemuaProduk && (
+                <Button
+                  variant="secondary"
+                  className="mx-auto h-11 px-4 text-xs"
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Halaman sebelumnya
+                </Button>
+              )}
               {lihatSemuaProduk && (
-                <div className="flex flex-col items-center gap-2 pt-2">
-                  {memuatSemua && <p role="status" className="text-xs text-muted">Memuat sisa produk…</p>}
-                  <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => setLihatSemuaProduk(false)}>
+                <div className="flex flex-col items-center gap-2 pt-1">
+                  {memuatSemua && (
+                    <p role="status" className="text-xs text-muted">
+                      Memuat sisa produk…
+                    </p>
+                  )}
+                  <Button
+                    variant="secondary"
+                    className="h-11 px-4 text-xs"
+                    onClick={() => setLihatSemuaProduk(false)}
+                  >
                     Kembali ke muat bertahap
                   </Button>
                 </div>
@@ -284,31 +508,41 @@ export function PosPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-primary">Keranjang</h2>
             <span className="text-sm font-semibold text-primary-soft">
-              {cartItems.length} produk · {cartCount} item
+              {ringkasItem(cartItems)}
             </span>
           </div>
           <div className="h-px bg-line-soft" />
-          <CartForm cart={cartItems} onQty={setQty} onSelesai={() => {}} onReset={() => setCart(new Map())} compact />
+          <CartForm
+            cart={cartItems}
+            onQty={setQty}
+            onSelesai={() => {}}
+            onReset={() => setCart(new Map())}
+            compact
+          />
         </aside>
       </div>
 
-      {/* Mobile: bar keranjang di bawah — surface + border-top, sticky */}
+      {/* Bar Keranjang (pen G49pEA): surface + garis atas line-soft, p[12,20,14,20], di atas bottom nav */}
       {cartCount > 0 && (
-        <div className="sticky bottom-[88px] z-30 flex items-center justify-between gap-3 border-t border-line-soft bg-surface px-5 pb-3.5 pt-3 md:hidden">
-          <div className="min-w-0">
-            <p className="text-xs text-muted">
-              {cartItems.length} produk · {cartCount} item
-            </p>
-            <p className="text-[20px] font-bold text-primary">{formatRupiah(String(cartTotal))}</p>
+        <div className="fixed inset-x-0 bottom-[calc(63px+max(25px,env(safe-area-inset-bottom)))] z-30 border-t border-line-soft bg-surface px-5 pb-3.5 pt-3 md:hidden">
+          <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-2.5">
+            <div className="flex min-w-0 flex-col gap-px">
+              <span className="text-xs text-muted">{ringkasItem(cartItems)}</span>
+              <span className="text-xl font-bold leading-tight tabular-nums text-primary">
+                {formatRupiah(cartTotal)}
+              </span>
+            </div>
+            <Button
+              aria-label="Buka keranjang"
+              className="shrink-0 ps-5 pe-5"
+              onClick={() => keLangkah('keranjang')}
+            >
+              <ShoppingBasket className="size-4" aria-hidden="true" />
+              Keranjang
+            </Button>
           </div>
-          <Button className="h-12 shrink-0" onClick={() => setCartOpen(true)} aria-label="Buka keranjang">
-            <ShoppingBasket className="size-4" aria-hidden="true" />
-            Keranjang
-          </Button>
         </div>
       )}
-
-      <CartModal open={cartOpen} onClose={() => setCartOpen(false)} cart={cartItems} onQty={setQty} />
     </div>
   );
 }

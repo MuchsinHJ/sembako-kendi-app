@@ -1,9 +1,14 @@
-import { useState, type FormEvent } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { useId, useState, type FormEvent } from 'react';
 import { useCreateMovement } from '@/features/consignors/api';
 import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
-import { TextField } from '@/components/TextField';
+import {
+  AmountField,
+  ContextCard,
+  EstimateRow,
+  InlineError,
+  SoftTextField,
+} from '@/components/SheetParts';
 import { ApiError } from '@/lib/http';
 import type { Product } from '../types';
 
@@ -16,12 +21,14 @@ interface MovementModalProps {
 }
 
 /**
- * Terima Titipan / Retur ke Penitip (03 §Subflow; BR-I/BR-J).
+ * Sheet Terima Titipan / Retur ke Penitip (pen GvEGl / TR9j6; BR-I/BR-J):
+ * kartu stok saat ini · jumlah · perkiraan stok · catatan · footer Batal + Simpan.
  * Mengubah stok titipan lewat endpoint konsinyasi — bukan edit stok manual.
  * Retur dibatasi stok tersedia; backend menolak dengan 422 bila melebihi.
  */
 export function MovementModal({ open, tipe, product, consignorNama, onClose }: MovementModalProps) {
-  const [jumlah, setJumlah] = useState('1');
+  const formId = useId();
+  const [jumlah, setJumlah] = useState('');
   const [catatan, setCatatan] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -38,85 +45,78 @@ export function MovementModal({ open, tipe, product, consignorNama, onClose }: M
       setFormError('Jumlah harus lebih dari 0.');
       return;
     }
-    if (melebihi) {
-      setFormError(`Jumlah retur melebihi stok tersedia (${product.stok}).`);
-      return;
-    }
+    if (melebihi) return;
     create.mutate(
       { productId: product.id, jumlah: n, catatan: catatan.trim() || null },
       {
         onSuccess: onClose,
         onError: (err: unknown) =>
-          setFormError(err instanceof ApiError ? err.message : 'Gagal menyimpan pergerakan titipan.'),
-      }
+          setFormError(
+            err instanceof ApiError ? err.message : 'Gagal menyimpan pergerakan titipan.',
+          ),
+      },
     );
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={terima ? 'Terima Titipan' : 'Retur ke Penitip'}>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-        <div className="rounded-input border border-line-soft bg-surface-muted p-3 text-sm">
-          <p className="font-semibold text-primary">{product.nama}</p>
-          <p className="text-xs text-muted">
-            Penitip {consignorNama} · Stok saat ini {product.stok}
-          </p>
-        </div>
-
-        <div className="flex items-end gap-2">
-          <Button
-            variant="icon"
-            aria-label="Kurangi jumlah"
-            className="h-12 w-12"
-            disabled={n <= 1}
-            onClick={() => setJumlah(String(Math.max(1, n - 1)))}
-          >
-            <Minus className="size-5" aria-hidden="true" />
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={terima ? 'Terima Titipan' : 'Retur ke Penitip'}
+      subtitle={`${product.nama} · ${consignorNama}`}
+      titleClassName="text-[17px] font-bold"
+      footer={
+        <>
+          <Button variant="soft" className="w-[110px] shrink-0" onClick={onClose}>
+            Batal
           </Button>
-          <TextField
-            label="Jumlah"
-            inputMode="numeric"
-            value={jumlah}
-            onChange={(e) => setJumlah(e.target.value.replace(/\D/g, ''))}
+          <Button
+            type="submit"
+            form={formId}
             className="flex-1"
-            aria-label="Jumlah titipan"
-          />
-          <Button
-            variant="icon"
-            aria-label="Tambah jumlah"
-            className="h-12 w-12"
-            onClick={() => setJumlah(String(n + 1))}
+            disabled={create.isPending || melebihi || n <= 0}
           >
-            <Plus className="size-5" aria-hidden="true" />
+            {create.isPending ? 'Menyimpan…' : terima ? 'Simpan Penerimaan' : 'Simpan Retur'}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-4">
+        <ContextCard label="Stok saat ini" value={product.stok} />
 
-        <div className="rounded-input border border-line-soft bg-surface-muted p-3 text-sm">
-          <span className="text-muted">Stok setelah penyimpanan: </span>
-          <span className={melebihi ? 'font-bold text-danger' : 'font-bold text-primary'}>{preview}</span>
-        </div>
+        <AmountField
+          label={terima ? 'Jumlah diterima' : 'Jumlah diretur'}
+          currency={false}
+          value={jumlah}
+          onChange={setJumlah}
+          invalid={melebihi}
+          helper={
+            terima
+              ? 'Masukkan jumlah barang yang diterima dari penitip.'
+              : `Maksimal ${product.stok} barang. Stok tidak boleh minus.`
+          }
+        />
 
         {melebihi && (
-          <p role="alert" className="text-xs font-medium text-danger">
+          <InlineError>
             Jumlah retur melebihi stok tersedia. Stok saat ini {product.stok}.
-          </p>
+          </InlineError>
         )}
 
-        <TextField label="Catatan (opsional)" value={catatan} onChange={(e) => setCatatan(e.target.value)} />
+        <EstimateRow
+          label={terima ? 'Stok setelah diterima' : 'Stok setelah retur'}
+          value={melebihi ? 'Tidak bisa dihitung' : preview}
+          danger={melebihi}
+        />
 
-        {formError && (
-          <p role="alert" className="text-sm font-medium text-danger">
-            {formError}
-          </p>
-        )}
+        <SoftTextField
+          label="Catatan (boleh dikosongkan)"
+          placeholder={terima ? 'cth. Titipan tambahan minggu ke-3' : 'cth. Barang ditarik penitip'}
+          value={catatan}
+          onChange={(e) => setCatatan(e.target.value)}
+        />
 
-        <Button
-          type="submit"
-          disabled={create.isPending || melebihi || n <= 0}
-          className="mt-1"
-          variant={terima ? 'primary' : 'secondary'}
-        >
-          {create.isPending ? 'Menyimpan…' : terima ? 'Simpan Penerimaan' : 'Simpan Retur'}
-        </Button>
+        {formError && <InlineError>{formError}</InlineError>}
       </form>
     </Modal>
   );

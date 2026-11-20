@@ -1,4 +1,4 @@
-import type { Transaction, TransactionItem } from './types';
+import type { CartItem, Transaction, TransactionItem } from './types';
 
 /**
  * Fungsi murni turunan (SDD FE §8.3) — cermin aturan backend BR-08/BR-13.
@@ -10,10 +10,7 @@ export const VOID_WINDOW_HOURS = 24;
 export type StatusPembayaran = 'LUNAS' | 'UTANG';
 
 /** BR-08: status diturunkan dari perbandingan uang diterima vs total. */
-export function derivasiStatusPembayaran(
-  total: number,
-  uangDiterima: number
-): StatusPembayaran {
+export function derivasiStatusPembayaran(total: number, uangDiterima: number): StatusPembayaran {
   return uangDiterima >= total ? 'LUNAS' : 'UTANG';
 }
 
@@ -73,11 +70,13 @@ export function isoToInputValue(iso: string): string {
  */
 export function ringkasanProdukTransaksi(items?: TransactionItem[]): string {
   if (!items || items.length === 0) return 'Transaksi Penjualan';
-  const names = items.map((i) => i.namaProdukSnapshot).filter(Boolean);
+  const names = items.map((i) => i.namaProdukSnapshot).filter((n): n is string => Boolean(n));
   if (names.length === 0) return 'Transaksi Penjualan';
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]}, ${names[1]}`;
-  return `${names[0]}, ${names[1]} (+${names.length - 2} lainnya)`;
+  const first = names[0] ?? 'Transaksi Penjualan';
+  if (names.length === 1) return first;
+  const second = names[1] ?? '';
+  if (names.length === 2) return `${first}, ${second}`;
+  return `${first}, ${second} (+${names.length - 2} lainnya)`;
 }
 
 /**
@@ -93,6 +92,31 @@ export function judulTransaksi(t: Transaction): string {
   return ringkasan;
 }
 
+/**
+ * Kode tampilan transaksi (pen "TRX-2026-1017-001"). Backend memakai UUID, jadi kode
+ * dirangkai dari tanggal transaksi + 4 karakter awal id: stabil & mudah dibaca kasir.
+ * Bukan pengenal unik di backend; pencarian/void tetap memakai `id`.
+ */
+export function kodeTransaksi(t: Pick<Transaction, 'id' | 'tanggal'>): string {
+  const d = new Date(t.tanggal);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const akhir = t.id.replace(/-/g, '').slice(0, 4).toUpperCase();
+  return `TRX-${d.getFullYear()}-${mm}${dd}-${akhir}`;
+}
+
+/** "Hari ini, 09.41" · "Kemarin, 08.00" · "2 hari lalu, 14.02" · "10 Okt 2026, 08.15" (pen Waktu). */
+export function formatWaktuRelatif(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  const jam = `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`;
+  const awal = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const selisihHari = Math.round((awal(now) - awal(d)) / 86_400_000);
+  if (selisihHari === 0) return `Hari ini, ${jam}`;
+  if (selisihHari === 1) return `Kemarin, ${jam}`;
+  if (selisihHari > 1 && selisihHari < 7) return `${selisihHari} hari lalu, ${jam}`;
+  return `${formatTanggalPendek(iso)}, ${jam}`;
+}
+
 /** Format tanggal lengkap dan jam untuk identitas detail (pen Q8YY2: "Sabtu, 17 Oktober 2026 · 09.41"). */
 export function formatTanggalLengkap(iso: string): string {
   const d = new Date(iso);
@@ -105,6 +129,20 @@ export function formatTanggalLengkap(iso: string): string {
   const jam = new Intl.DateTimeFormat('id-ID', {
     hour: '2-digit',
     minute: '2-digit',
-  }).format(d).replace(':', '.');
+  })
+    .format(d)
+    .replace(':', '.');
   return `${tgl} · ${jam}`;
 }
+
+/** "2 produk · 3 item" (pen Jumlah Item / Label Item Keranjang). */
+export function ringkasItem(cart: CartItem[]): string {
+  const item = cart.reduce((s, i) => s + i.qty, 0);
+  return `${cart.length} produk · ${item} item`;
+}
+
+/** Total belanja keranjang (harga jual × jumlah). */
+export function totalKeranjang(cart: CartItem[]): number {
+  return cart.reduce((s, i) => s + Number(i.product.hargaJual) * i.qty, 0);
+}
+

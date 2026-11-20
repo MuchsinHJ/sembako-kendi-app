@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Package, Plus, TriangleAlert } from 'lucide-react';
+import { ChevronRight, Package, Plus, SearchX, TriangleAlert } from 'lucide-react';
 import { useProductCategories, useProducts } from './api';
 import { ProductFormModal } from './components/ProductFormModal';
 import { Button } from '@/components/Button';
@@ -13,7 +13,7 @@ import { SegmentedFilter } from '@/components/SegmentedFilter';
 import { formatRupiah } from '@/lib/money';
 import { useMediaQuery } from '@/lib/useMediaQuery';
 import { cn } from '@/lib/cn';
-import { daftarKategori, gabungKategori, type OpsiKategori } from './kategori';
+import { daftarKategori, gabungKategori, labelKategoriTipe } from './kategori';
 import type { Product, StatusFilter, TipeFilter } from './types';
 
 const STATUS_OPTIONS = [
@@ -28,43 +28,68 @@ const TIPE_OPTIONS = [
   { value: 'TITIPAN', label: 'Titipan' },
 ] as const;
 
-/** Baris produk (pen: list 52px thumb, radius 14, badge + stok + chevron) */
+/**
+ * Baris produk (pen Produk - Beras Ramos 5 kg): surface r14 p10 gap10 stroke line-soft.
+ * Thumb 52 r10 · info gap 3 (nama 14/600, kategori 12/500 muted, harga 13/700) ·
+ * kolom status w78 gap5 (badge + stok 12/600: warning bila menipis) · chevron 16.
+ * Nonaktif: nama/harga/ikon/stok/chevron memakai muted.
+ */
 function ProductRow({ product }: { product: Product }) {
   const menipis = product.stok <= product.stokMinimum;
   const nonaktif = product.status === 'NONAKTIF';
   return (
     <Link
       to={`/produk/${product.id}`}
-      className="press-scale card-hover flex items-center gap-2.5 rounded-[14px] border border-line-soft bg-surface p-2.5 focus:outline-none focus:ring-2 focus:ring-accent/40"
+      className="press-scale card-hover flex items-center gap-2.5 rounded-[14px] border border-line-soft bg-surface p-2.5"
     >
-      <div
-        className={cn(
-          'flex size-[52px] shrink-0 items-center justify-center rounded-[10px] bg-surface-muted',
-          nonaktif && 'opacity-55'
-        )}
-      >
+      <div className="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-surface-muted">
         {product.fotoUrl ? (
-          <img src={product.fotoUrl} alt="" className="size-full rounded-[10px] object-cover" />
+          <img
+            src={product.fotoUrl}
+            alt=""
+            className={cn(
+              'size-full object-cover outline outline-1 -outline-offset-1 outline-black/10',
+              nonaktif && 'opacity-60',
+            )}
+          />
         ) : (
-          <Package className="size-5 text-primary-soft" aria-hidden="true" />
+          <Package
+            className={cn('size-5', nonaktif ? 'text-muted' : 'text-primary-soft')}
+            aria-hidden="true"
+          />
         )}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-sm font-semibold text-primary', nonaktif && 'text-muted')}>{product.nama}</p>
-        <p className="truncate text-xs font-medium text-muted">
-          {product.kategori} · {product.tipe === 'TITIPAN' ? 'Titipan' : 'Milik Sendiri'}
+      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+        <p
+          className={cn('truncate text-sm font-semibold', nonaktif ? 'text-muted' : 'text-primary')}
+        >
+          {product.nama}
         </p>
-        <p className={cn('text-[13px] font-bold tabular-nums', nonaktif ? 'text-muted' : 'text-primary')}>
+        <p className="truncate text-xs font-medium text-muted">{labelKategoriTipe(product)}</p>
+        <p
+          className={cn(
+            'text-[13px] font-bold tabular-nums',
+            nonaktif ? 'text-muted' : 'text-primary',
+          )}
+        >
           {formatRupiah(product.hargaJual)}
         </p>
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
+      <div className="flex w-[78px] shrink-0 flex-col items-end gap-[5px]">
         <Badge variant={nonaktif ? 'netral' : 'lunas'} label={nonaktif ? 'Nonaktif' : 'Aktif'} />
-        <span className={cn('text-xs font-semibold', menipis ? 'text-warning' : 'text-muted')}>
+        <span
+          className={cn(
+            'text-xs font-semibold tabular-nums',
+            nonaktif ? 'text-muted' : menipis ? 'text-warning' : 'text-primary-soft',
+          )}
+        >
           Stok {product.stok}
         </span>
       </div>
-      <ChevronRight className="size-4 shrink-0 text-primary-soft" aria-hidden="true" />
+      <ChevronRight
+        className={cn('size-4 shrink-0', nonaktif ? 'text-muted' : 'text-primary-soft')}
+        aria-hidden="true"
+      />
     </Link>
   );
 }
@@ -94,7 +119,7 @@ function ProductCard({ product }: { product: Product }) {
       <div
         className={cn(
           'relative flex aspect-[4/3] items-center justify-center bg-surface-muted',
-          nonaktif && 'opacity-55'
+          nonaktif && 'opacity-55',
         )}
       >
         <div className="absolute left-3 top-3">
@@ -112,14 +137,29 @@ function ProductCard({ product }: { product: Product }) {
         )}
       </div>
       <div className="flex flex-col gap-1 p-3.5">
-        <p className={cn('line-clamp-2 text-[14.5px] font-semibold leading-snug text-primary', nonaktif && 'text-muted')}>
+        <p
+          className={cn(
+            'line-clamp-2 text-[14.5px] font-semibold leading-snug text-primary',
+            nonaktif && 'text-muted',
+          )}
+        >
           {product.nama}
         </p>
         <p className="text-xs text-muted">{product.kategori}</p>
-        <p className={cn('text-[18px] font-bold tabular-nums', nonaktif ? 'text-muted' : 'text-primary')}>
+        <p
+          className={cn(
+            'text-[18px] font-bold tabular-nums',
+            nonaktif ? 'text-muted' : 'text-primary',
+          )}
+        >
           {formatRupiah(product.hargaJual)}
         </p>
-        <span className={cn('flex items-center gap-1 text-xs font-semibold', menipis ? 'text-warning' : 'text-muted')}>
+        <span
+          className={cn(
+            'flex items-center gap-1 text-xs font-semibold',
+            menipis ? 'text-warning' : 'text-muted',
+          )}
+        >
           {menipis && <TriangleAlert className="size-3.5" aria-hidden="true" />}
           Sisa {product.stok}
         </span>
@@ -191,32 +231,43 @@ export function KatalogPage() {
   }
 
   const products = lihatSemua
-    ? data?.pages.flatMap((p) => p.data) ?? []
-    : data?.pages[page - 1]?.data ?? data?.pages[0]?.data ?? [];
+    ? (data?.pages.flatMap((p) => p.data) ?? [])
+    : (data?.pages[page - 1]?.data ?? data?.pages[0]?.data ?? []);
   const loadedProducts = data?.pages.flatMap((p) => p.data) ?? [];
   const total = data?.pages[0]?.pagination.total ?? 0;
-  const menipis = products.filter((p) => p.stok <= p.stokMinimum).length;
-  const titipan = products.filter((p) => p.tipe === 'TITIPAN').length;
+  const filterAktif = status !== 'SEMUA' || tipe !== 'SEMUA' || katAktif !== 'SEMUA';
+  const katalogKosong = !isLoading && !isError && total === 0 && !debounced && !filterAktif;
+  const tidakDitemukan = !isLoading && !isError && total === 0 && !katalogKosong;
+  // Paginasi hanya tampil bila server melaporkan lebih dari satu halaman.
+  const perluPaginasi = (data?.pages[0]?.pagination.totalPages ?? 1) > 1;
+
+  function kosongkanPencarian() {
+    setSearch('');
+    setDebounced('');
+    setTipe('SEMUA');
+    setStatus('SEMUA');
+    setKatAktif('SEMUA');
+  }
 
   // Daftar kategori dasar (tidak terpengaruh oleh filter kategori aktif agar pilihan tidak hilang).
   const { data: baseCategories = [] } = useProductCategories({ status, tipe });
-  const [kategoriList, setKategoriList] = useState<OpsiKategori[]>([]);
-
-  useEffect(() => {
-    const fromLoaded = daftarKategori(loadedProducts.map((p) => p.kategori));
-    setKategoriList(gabungKategori(baseCategories, fromLoaded));
-  }, [baseCategories, loadedProducts]);
+  const kategoriList = useMemo(() => {
+    const fromLoaded = daftarKategori(
+      (data?.pages.flatMap((p) => p.data) ?? []).map((p) => p.kategori),
+    );
+    return gabungKategori(baseCategories, fromLoaded);
+  }, [baseCategories, data?.pages]);
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Pen (canvas qsy7c/U4Fuey): CTA "Tambah Produk" di aksi header kanan pada md+; mobile tetap pill bawah. */}
+    <div className="flex min-h-[calc(100dvh-128px-env(safe-area-inset-bottom))] flex-col gap-3 md:min-h-0">
+      {/* Header (pen gap 3). CTA header hanya md+ (canvas qsy7c/U4Fuey); mobile memakai pill bawah. */}
       <ScreenHeader
         eyebrow="KATALOG"
         title="Produk"
-        info={data ? `${total} produk ditampilkan${menipis ? ` · ${menipis} stok menipis` : ''}${titipan ? ` · ${titipan} titipan` : ''}` : undefined}
+        info={data && !katalogKosong ? `${total} produk ditampilkan` : undefined}
         action={
           <Button
-            className="h-11 shrink-0 gap-2 px-3.5 text-xs md:px-5 md:text-sm"
+            className="hidden h-11 shrink-0 gap-2 ps-4 pe-5 text-sm md:inline-flex"
             aria-label="Tambah Produk"
             onClick={() => setFormOpen(true)}
           >
@@ -226,41 +277,60 @@ export function KatalogPage() {
         }
       />
 
-      <div className="flex flex-col gap-3">
-        <SearchField value={search} onChange={setSearch} placeholder="Cari nama atau kategori produk" />
-        <div className="flex flex-wrap gap-2">
-          {TIPE_OPTIONS.map((opt) => (
-            <ChipFilter
-              key={opt.value}
-              active={tipe === opt.value}
-              onClick={() => setTipe(opt.value)}
-              aria-label={`Tipe ${opt.label}`}
-            >
-              {opt.label}
-            </ChipFilter>
-          ))}
-        </div>
+      {!katalogKosong && (
+        <div className="flex flex-col gap-3">
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Cari nama atau kategori produk"
+          />
 
-        {/* Filter kategori — tetap menampilkan seluruh kategori saat salah satu dipilih */}
-        {kategoriList.length > 0 && (
-          <div role="group" aria-label="Filter kategori" className="flex flex-wrap gap-2">
-            <ChipFilter active={katAktif === 'SEMUA'} onClick={() => setKatAktif('SEMUA')}>
-              Semua Kategori
-            </ChipFilter>
-            {kategoriList.map((k) => (
+          {/* Filter tipe (pen Filter Kategori: chip 44, gap 8) */}
+          <div role="group" aria-label="Filter tipe produk" className="flex flex-wrap gap-2">
+            {TIPE_OPTIONS.map((opt) => (
               <ChipFilter
-                key={k.key}
-                active={katAktif === k.key}
-                onClick={() => setKatAktif(k.key)}
-                aria-label={`Kategori ${k.label}`}
+                key={opt.value}
+                active={tipe === opt.value}
+                onClick={() => setTipe(opt.value)}
+                aria-label={`Tipe ${opt.label}`}
               >
-                {k.label}
+                {opt.label}
               </ChipFilter>
             ))}
           </div>
-        )}
-        <SegmentedFilter label="Status" options={STATUS_OPTIONS} value={status} onChange={setStatus} />
-      </div>
+
+          {/* Filter kategori (tambahan di luar canvas): baris geser horizontal seperti chip kategori POS,
+              daftar tetap utuh saat salah satu kategori dipilih. */}
+          {kategoriList.length > 0 && (
+            <div
+              role="group"
+              aria-label="Filter kategori"
+              className="chip-scroller -mx-5 flex gap-2 overflow-x-auto px-5 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+            >
+              <ChipFilter active={katAktif === 'SEMUA'} onClick={() => setKatAktif('SEMUA')}>
+                Semua Kategori
+              </ChipFilter>
+              {kategoriList.map((k) => (
+                <ChipFilter
+                  key={k.key}
+                  active={katAktif === k.key}
+                  onClick={() => setKatAktif(k.key)}
+                  aria-label={`Kategori ${k.label}`}
+                >
+                  {k.label}
+                </ChipFilter>
+              ))}
+            </div>
+          )}
+
+          <SegmentedFilter
+            label="Status"
+            options={STATUS_OPTIONS}
+            value={status}
+            onChange={setStatus}
+          />
+        </div>
+      )}
 
       {isLoading && (
         <div className="flex flex-col gap-2.5">
@@ -280,78 +350,133 @@ export function KatalogPage() {
         </Card>
       )}
 
-      {!isLoading && !isError && total === 0 && (
-        <Card variant="list" className="flex flex-col items-center gap-2 py-10 text-center">
-          {debounced ? (
-            <>
-              <p className="text-sm font-semibold text-primary">
-                Tidak ada produk untuk &ldquo;{debounced}&rdquo;
-              </p>
-              <Button variant="secondary" className="h-10 px-4 text-xs" onClick={() => setSearch('')}>
-                Hapus pencarian
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-primary">Belum ada produk</p>
-              <p className="text-xs text-muted">Mulai dengan menambahkan produk pertama toko Anda.</p>
-              <Button className="h-10 px-4 text-xs" onClick={() => setFormOpen(true)}>
-                <Plus className="size-4" aria-hidden="true" />
-                Tambah Produk
-              </Button>
-            </>
-          )}
-        </Card>
+      {/* Empty State Katalog (pen v5AKiZ): ikon 72 bulat, judul 18/600, keterangan 13 w280, CTA 48 */}
+      {katalogKosong && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3.5 p-5 text-center">
+          <div className="flex size-[72px] items-center justify-center rounded-full bg-surface-muted">
+            <Package className="size-[30px] text-primary-soft" aria-hidden="true" />
+          </div>
+          <p className="text-lg font-semibold text-primary">Belum ada produk</p>
+          <p className="max-w-[280px] text-[13px] leading-normal text-muted">
+            Katalog masih kosong. Tambahkan produk pertama supaya bisa dipilih saat mencatat
+            transaksi.
+          </p>
+          <Button className="h-12 gap-[7px] px-6 text-sm" onClick={() => setFormOpen(true)}>
+            <Plus className="size-4" aria-hidden="true" />
+            Tambah Produk
+          </Button>
+        </div>
       )}
 
-      {!isLoading && !isError && products.length > 0 && (
-        <>
-          {isMd ? (
-            /* Tablet 3 kolom, Desktop 4 kolom (06 §5.1): kartu bergambar (canvas qsy7c/U4Fuey). */
-            <div className="grid grid-cols-3 gap-3.5 xl:grid-cols-4 xl:gap-[18px]">
-              {products.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
-            </div>
-          ) : (
-            /* Mobile (canvas cG6zP): list vertikal + chevron. */
-            <div className="flex flex-col gap-2.5">
-              {products.map((p) => (
-                <ProductRow key={p.id} product={p} />
-              ))}
-            </div>
-          )}
-        </>
+      {/* Empty State Pencarian (pen LlckD): ikon 72, judul 18/600, keterangan 13 w270, tombol garis 48 */}
+      {tidakDitemukan && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-5 text-center">
+          <div className="flex size-[72px] items-center justify-center rounded-full bg-surface-muted">
+            <SearchX className="size-[30px] text-primary-soft" aria-hidden="true" />
+          </div>
+          <p className="text-lg font-semibold text-primary">Produk tidak ditemukan</p>
+          <p className="max-w-[270px] text-[13px] leading-normal text-muted">
+            {debounced
+              ? `Tidak ada produk yang cocok dengan “${debounced}”. Coba kata kunci lain atau kosongkan pencarian.`
+              : 'Tidak ada produk yang cocok dengan filter ini. Coba pilih filter lain.'}
+          </p>
+          <Button
+            variant="secondary"
+            className="h-12 px-[22px] text-[12.5px]"
+            onClick={kosongkanPencarian}
+          >
+            {debounced ? 'Kosongkan Pencarian' : 'Reset Filter'}
+          </Button>
+        </div>
       )}
 
-      {/* Pagination client-side di atas halaman server 12 produk; Lihat semua opt-in memuat sisanya. */}
-      {!isLoading && !isError && products.length > 0 && !lihatSemua && (
-        <div className="flex flex-col items-center gap-2 pt-2">
-          <p className="text-xs text-muted">Menampilkan {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} dari {total} produk</p>
+      {!isLoading &&
+        !isError &&
+        products.length > 0 &&
+        (isMd ? (
+          /* Tablet 3 kolom, Desktop 4 kolom (06 §5.1): kartu bergambar (canvas qsy7c/U4Fuey). */
+          <div className="grid grid-cols-3 gap-3.5 xl:grid-cols-4 xl:gap-[18px]">
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        ) : (
+          /* Mobile (pen Daftar Produk): list vertikal gap 10 */
+          <div className="flex flex-col gap-2.5">
+            {products.map((p) => (
+              <ProductRow key={p.id} product={p} />
+            ))}
+          </div>
+        ))}
+
+      {/* Paginasi (tambahan): hanya muncul bila produk melebihi satu halaman server (12). */}
+      {!isLoading && !isError && products.length > 0 && perluPaginasi && !lihatSemua && (
+        <div className="flex flex-col items-center gap-2 pt-1">
+          <p className="text-xs text-muted">
+            Menampilkan {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} dari {total}{' '}
+            produk
+          </p>
           <div className="flex w-full flex-wrap items-center justify-center gap-2">
             {page > 1 && (
-              <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => setPage((p) => p - 1)}>
+              <Button
+                variant="secondary"
+                className="h-11 px-4 text-xs"
+                onClick={() => setPage((p) => p - 1)}
+              >
                 Sebelumnya
               </Button>
             )}
-            {hasNextPage && (
-              <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => void goToNextPage()} disabled={isFetchingNextPage}>
-                {isFetchingNextPage ? 'Memuat…' : `Berikutnya${page * pageSize < total ? ` (${Math.max(0, total - page * pageSize)} produk)` : ''}`}
+            {hasNextPage || page < (data?.pages.length ?? 0) ? (
+              <Button
+                variant="secondary"
+                className="h-11 px-4 text-xs"
+                onClick={() => void goToNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage
+                  ? 'Memuat…'
+                  : `Berikutnya${page * pageSize < total ? ` (${Math.max(0, total - page * pageSize)} produk)` : ''}`}
               </Button>
-            )}
+            ) : null}
             {total > loadedProducts.length && (
-              <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => void loadAllProducts()} disabled={memuatSemua || isFetchingNextPage}>
+              <Button
+                variant="secondary"
+                className="h-11 px-4 text-xs"
+                onClick={() => void loadAllProducts()}
+                disabled={memuatSemua || isFetchingNextPage}
+              >
                 {memuatSemua ? 'Memuat semua…' : `Lihat semua (${total})`}
               </Button>
             )}
           </div>
         </div>
       )}
-      {lihatSemua && products.length > 0 && (
-        <div className="flex flex-col items-center gap-2 pt-2">
-          {memuatSemua && <p role="status" className="text-xs text-muted">Memuat sisa produk…</p>}
-          <Button variant="secondary" className="h-11 px-4 text-xs" onClick={() => { setLihatSemua(false); setPage(1); }}>
+      {lihatSemua && products.length > 0 && perluPaginasi && (
+        <div className="flex flex-col items-center gap-2 pt-1">
+          {memuatSemua && (
+            <p role="status" className="text-xs text-muted">
+              Memuat sisa produk…
+            </p>
+          )}
+          <Button
+            variant="secondary"
+            className="h-11 px-4 text-xs"
+            onClick={() => {
+              setLihatSemua(false);
+              setPage(1);
+            }}
+          >
             Tampilkan per halaman
+          </Button>
+        </div>
+      )}
+
+      {/* Tombol Tambah Produk (pen): pill 48 primary, menempel di bawah konten (Content justify space-between) */}
+      {!isLoading && !katalogKosong && (
+        <div className="mt-auto pt-1 md:hidden">
+          <Button className="h-12 w-full gap-[7px] text-sm" onClick={() => setFormOpen(true)}>
+            <Plus className="size-4" aria-hidden="true" />
+            <span>Tambah Produk</span>
           </Button>
         </div>
       )}

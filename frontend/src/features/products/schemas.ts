@@ -19,7 +19,7 @@ export const productFormSchema = z
     stokAwal: z.string().optional(),
     stokMinimum: z.string(),
     tipe: tipeProduk.default('MILIK_SENDIRI'),
-    consignorId: z.string().uuid().nullable().optional(),
+    consignorId: z.string().min(1).nullable().optional(),
     foto: z.instanceof(File).nullable().optional(),
   })
   .superRefine((val, ctx) => {

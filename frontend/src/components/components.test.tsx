@@ -89,7 +89,7 @@ describe('SegmentedFilter', () => {
         ]}
         value="all"
         onChange={onChange}
-      />
+      />,
     );
     const group = screen.getByRole('radiogroup', { name: 'Status' });
     expect(group).toBeInTheDocument();
@@ -103,12 +103,14 @@ describe('Modal — checklist a11y', () => {
     render(
       <Modal open onClose={() => {}} title="Nonaktifkan produk?">
         <p>Isi</p>
-      </Modal>
+      </Modal>,
     );
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(dialog).toHaveAttribute('aria-labelledby', 'modal-title');
-    expect(screen.getByText('Nonaktifkan produk?')).toBeInTheDocument();
+    // Judul tertaut lewat id unik (useId) agar dialog bertumpuk tidak berbagi id.
+    const heading = screen.getByRole('heading', { name: 'Nonaktifkan produk?' });
+    expect(dialog).toHaveAttribute('aria-labelledby', heading.id);
+    expect(screen.getByRole('dialog', { name: 'Nonaktifkan produk?' })).toBe(dialog);
   });
 
   it('Esc menutup', async () => {
@@ -116,7 +118,7 @@ describe('Modal — checklist a11y', () => {
     render(
       <Modal open onClose={onClose} title="Judul">
         <p>Isi</p>
-      </Modal>
+      </Modal>,
     );
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -126,7 +128,7 @@ describe('Modal — checklist a11y', () => {
     render(
       <Modal open onClose={() => {}} title="Judul">
         <button type="button">Di dalam</button>
-      </Modal>
+      </Modal>,
     );
     expect(screen.getByRole('dialog')).toHaveFocus();
   });

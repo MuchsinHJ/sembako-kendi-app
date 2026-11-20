@@ -16,7 +16,7 @@ function renderAt(path: string, element: React.ReactElement) {
       <Routes>
         <Route path={path} element={element} />
       </Routes>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -33,42 +33,67 @@ async function bukaKeranjang() {
 }
 
 describe('POS (Transaksi Baru)', () => {
-  it('transaksi lunas: kembalian tampil setelah submit', async () => {
+  it('transaksi lunas: keranjang → konfirmasi → tersimpan dengan kembalian', async () => {
     renderAt('/transaksi', <PosPage />);
     await tambahKeKeranjang('Beras 5kg');
     await bukaKeranjang();
 
-    const dlg = getDialog();
-    expect(dlg.getByText('1 × Rp75.000')).toBeInTheDocument();
-    expect(dlg.getByText('Rp75.000')).toBeInTheDocument();
-    expect(dlg.getByText('Utang')).toBeInTheDocument();
+    // Langkah Keranjang (pen p6iFM)
+    expect(await screen.findByText('Rp75.000 × 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Periksa Transaksi' })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Uang diterima'), '100000');
+    expect(screen.getByText('Kembalian')).toBeInTheDocument();
+    expect(screen.getByText('Rp25.000')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Periksa Transaksi' }));
 
-    await userEvent.type(dlg.getByLabelText('Uang diterima'), '100000');
-    expect(dlg.getByText('Lunas')).toBeInTheDocument();
-    await userEvent.click(dlg.getByRole('button', { name: 'Selesaikan Transaksi' }));
+    // Langkah Konfirmasi (pen Iz4Nr)
+    expect(
+      await screen.findByRole('heading', { name: 'Konfirmasi Transaksi' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Lunas')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Simpan Transaksi' }));
 
-    expect(await dlg.findByText(/Transaksi berhasil/)).toBeInTheDocument();
-    expect(dlg.getByText(/Kembalian Rp25\.000/)).toBeInTheDocument();
-    await userEvent.click(dlg.getByRole('button', { name: 'Selesai' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Langkah Berhasil (pen maq6j)
+    expect(await screen.findByText('Transaksi tersimpan')).toBeInTheDocument();
+    expect(screen.getByText('Kembalian')).toBeInTheDocument();
+    expect(screen.getByText('Rp25.000')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Transaksi Baru' }));
+    expect(await screen.findByRole('button', { name: 'Tambah Beras 5kg' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /buka keranjang/i })).not.toBeInTheDocument();
   });
 
-  it('transaksi utang: nama pembeli wajib, lalu sisa utang tampil', async () => {
+  it('transaksi utang: nama pembeli wajib di konfirmasi, lalu sisa utang tampil', async () => {
     renderAt('/transaksi', <PosPage />);
     await tambahKeKeranjang('Beras 5kg');
     await bukaKeranjang();
 
-    const dlg = getDialog();
-    await userEvent.type(dlg.getByLabelText('Uang diterima'), '50000');
-    expect(dlg.getByText('Utang')).toBeInTheDocument();
+    await userEvent.type(await screen.findByLabelText('Uang diterima'), '50000');
+    expect(screen.getByText('Sisa utang')).toBeInTheDocument();
+    expect(screen.getByText('Nama pembeli wajib diisi di langkah konfirmasi.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Periksa Transaksi' }));
 
-    await userEvent.click(dlg.getByRole('button', { name: 'Selesaikan Transaksi' }));
-    expect(dlg.getByText('Isi nama pembeli untuk mencatat transaksi utang.')).toBeInTheDocument();
+    expect(await screen.findByText('Utang')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Simpan Transaksi' }));
+    expect(screen.getByText('Nama pembeli wajib diisi untuk transaksi utang.')).toBeInTheDocument();
 
-    await userEvent.type(dlg.getByLabelText('Nama pembeli'), 'Pak Budi');
-    await userEvent.click(dlg.getByRole('button', { name: 'Selesaikan Transaksi' }));
+    await userEvent.type(screen.getByLabelText(/^Nama Pembeli/), 'Pak Budi');
+    await userEvent.click(screen.getByRole('button', { name: 'Simpan Transaksi' }));
 
-    expect(await dlg.findByText(/Sisa utang Rp25\.000/)).toBeInTheDocument();
+    expect(await screen.findByText('Transaksi tersimpan')).toBeInTheDocument();
+    expect(screen.getByText('Sisa utang')).toBeInTheDocument();
+    expect(screen.getByText('Rp25.000')).toBeInTheDocument();
+    expect(screen.getByText('Pak Budi')).toBeInTheDocument();
+  });
+
+  it('jumlah di keranjang dibatasi stok produk', async () => {
+    renderAt('/transaksi', <PosPage />);
+    await tambahKeKeranjang('Beras 5kg');
+    await bukaKeranjang();
+    const tambah = await screen.findByRole('button', { name: 'Tambah Beras 5kg' });
+    for (let i = 0; i < 11; i++) await userEvent.click(tambah);
+    expect(screen.getByText('Rp75.000 × 12')).toBeInTheDocument();
+    expect(tambah).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Kurangi Beras 5kg' })).toBeEnabled();
   });
 });
 
@@ -100,15 +125,19 @@ describe('Riwayat Transaksi', () => {
           success: true,
           data: { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } },
         });
-      })
+      }),
     );
     renderAt('/riwayat', <RiwayatPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Ubah rentang tanggal' }));
     const dlg = within(await screen.findByRole('dialog'));
 
-    fireEvent.change(await dlg.findByLabelText('Tanggal mulai'), { target: { value: '2026-10-01' } });
-    fireEvent.change(await dlg.findByLabelText('Tanggal akhir'), { target: { value: '2026-10-31' } });
+    fireEvent.change(await dlg.findByLabelText('Tanggal mulai'), {
+      target: { value: '2026-10-01' },
+    });
+    fireEvent.change(await dlg.findByLabelText('Tanggal akhir'), {
+      target: { value: '2026-10-31' },
+    });
     await userEvent.click(dlg.getByRole('button', { name: 'Terapkan' }));
 
     await waitFor(() => expect(captured).toBeDefined());
@@ -118,78 +147,105 @@ describe('Riwayat Transaksi', () => {
       endDate: new Date('2026-10-31T23:59:59').toISOString(),
     });
     // Empty state memakai rentang yang baru, bukan teks statis 30 hari.
-    expect(await screen.findByText(/Tidak ada transaksi pada rentang 1 Okt 2026 – 31 Okt 2026/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Tidak ada transaksi pada rentang 1 Okt 2026 – 31 Okt 2026/),
+    ).toBeInTheDocument();
   });
 
-  it('transaksi di luar 24 jam: tombol disembunyikan, penjelasan batas waktu', async () => {
+  it('transaksi di luar 24 jam: detail tanpa tombol batalkan + penjelasan batas waktu', async () => {
     renderAt('/riwayat', <RiwayatPage />);
     await screen.findByText('Rp75.000');
-    // Daftar hanya menampilkan tombol Batalkan untuk t1 (2 jam); t2 (72 jam) tidak punya.
-    expect(screen.getAllByRole('button', { name: 'Batalkan' })).toHaveLength(1);
-
-    // Penjelasan batas waktu ada di panel detail (canvas k4IRS) — pilih t2.
-    await userEvent.click(screen.getByRole('button', { name: /Transaksi t2, Rp36\.000/ }));
-    expect(await screen.findByText(/Pembatalan hanya bisa dilakukan maksimal 24 jam/)).toBeInTheDocument();
+    // Detail dibuka sebagai layar penuh (pen k4IRS) dari kartu t2 (72 jam).
+    await userEvent.click(screen.getByRole('button', { name: /Rp36\.000/ }));
+    expect(await screen.findByRole('heading', { name: 'Detail Transaksi' })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Pembatalan hanya bisa dilakukan maksimal 24 jam/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/sudah melewati batas pembatalan 24 jam/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Batalkan Transaksi' })).not.toBeInTheDocument();
+    // Tombol kembali menutup detail dan memunculkan daftar lagi.
+    await userEvent.click(screen.getByRole('button', { name: 'Kembali' }));
+    expect(await screen.findByRole('button', { name: 'Ubah rentang tanggal' })).toBeInTheDocument();
   });
 
-  it('tombol Batalkan hanya untuk transaksi 24 jam terakhir; void sukses', async () => {
+  it('transaksi 24 jam terakhir: batalkan dari detail → dialog konfirmasi → status Dibatalkan', async () => {
     renderAt('/riwayat', <RiwayatPage />);
     await screen.findByText('Rp75.000');
-
-    // t1 recent (2 jam) punya tombol; t2 lama (72 jam) tidak.
-    const voidButtons = screen.getAllByRole('button', { name: 'Batalkan' });
-    expect(voidButtons).toHaveLength(1);
-    const voidBtn = voidButtons[0];
-    if (!voidBtn) throw new Error('tombol batalkan tidak ada');
-    await userEvent.click(voidBtn);
+    await userEvent.click(screen.getByRole('button', { name: /Rp75\.000/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Batalkan Transaksi' }));
     const dlg = getDialog();
-    expect(dlg.getByText(/Transaksi akan dibatalkan/)).toBeInTheDocument();
-
-    await userEvent.click(dlg.getByRole('button', { name: 'Batalkan Transaksi' }));
-    // t1 jadi DIBATALKAN + t3 fixture sudah DIBATALKAN → master + panel detail bisa dobel.
-    await waitFor(() => expect(screen.getAllByText('Dibatalkan').length).toBeGreaterThanOrEqual(2));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(dlg.getByText(/dikembalikan otomatis setelah pembatalan disimpan/)).toBeInTheDocument();
+    await userEvent.click(dlg.getByRole('button', { name: 'Ya, Batalkan' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByTestId('badge-netral')).toHaveTextContent('Dibatalkan');
+    expect(screen.getByText(/Transaksi dibatalkan/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Batalkan Transaksi' })).not.toBeInTheDocument();
   });
 });
 
 describe('Utang', () => {
-  it('daftar utang: sisa, catat cicilan > sisa ditolak client, pelunasan menghapus baris', async () => {
+  async function bukaDetailPakBudi() {
+    renderAt('/utang', <DebtsPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /Utang Pak Budi/ }));
+    expect(
+      await screen.findByRole('heading', { name: 'Detail Transaksi Utang' }),
+    ).toBeInTheDocument();
+  }
+
+  async function catat(nominal: string) {
+    await userEvent.click(screen.getByRole('button', { name: 'Catat Pembayaran' }));
+    const sheet = getDialog();
+    await userEvent.type(sheet.getByLabelText('Nominal cicilan'), nominal);
+    await userEvent.click(sheet.getByRole('button', { name: 'Lanjutkan' }));
+    const konfirmasi = within(await screen.findByRole('dialog', { name: 'Catat pembayaran ini?' }));
+    await userEvent.click(konfirmasi.getByRole('button', { name: 'Simpan Cicilan' }));
+    expect(await screen.findByText('Pembayaran tercatat')).toBeInTheDocument();
+  }
+
+  it('daftar utang: jumlah transaksi + sisa utang per pembeli', async () => {
     renderAt('/utang', <DebtsPage />);
     expect(await screen.findByText('Pak Budi')).toBeInTheDocument();
     expect(screen.getAllByText('Rp36.000').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('1 transaksi belum lunas')).toBeInTheDocument();
+  });
+
+  it('cicilan melebihi sisa ditolak di klien; cicilan sebagian lalu pelunasan', async () => {
+    await bukaDetailPakBudi();
 
     await userEvent.click(screen.getByRole('button', { name: 'Catat Pembayaran' }));
-    const dlg = getDialog();
-    expect(dlg.getByText('Rp36.000')).toBeInTheDocument();
-
-    const input = dlg.getByLabelText('Nominal cicilan');
-    await userEvent.type(input, '40000');
+    const sheet = getDialog();
+    await userEvent.type(sheet.getByLabelText('Nominal cicilan'), '40000');
     expect(
-      dlg.getByText('Nominal cicilan melebihi sisa utang. Sisa utang transaksi ini Rp36.000.')
+      sheet.getByText('Nominal cicilan melebihi sisa utang. Sisa utang transaksi ini Rp36.000.'),
     ).toBeInTheDocument();
-    expect(dlg.getByRole('button', { name: 'Simpan Cicilan' })).toBeDisabled();
+    expect(sheet.getByText('Tidak bisa dihitung')).toBeInTheDocument();
+    expect(sheet.getByRole('button', { name: 'Lanjutkan' })).toBeDisabled();
+    await userEvent.click(sheet.getByRole('button', { name: 'Batal' }));
 
-    await userEvent.clear(input);
-    await userEvent.type(input, '10000');
-    await userEvent.click(dlg.getByRole('button', { name: 'Simpan Cicilan' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect((await screen.findAllByText('Rp26.000')).length).toBeGreaterThanOrEqual(1);
+    await catat('10000');
+    expect(
+      screen.getByText('Status pembayaran tetap Utang karena saldo belum mencapai Rp0.'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Rp26.000').length).toBeGreaterThanOrEqual(1);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Catat Pembayaran' }));
-    const dlg2 = getDialog();
-    const input2 = dlg2.getByLabelText('Nominal cicilan');
-    await userEvent.type(input2, '26000');
-    await userEvent.click(dlg2.getByRole('button', { name: 'Simpan Cicilan' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Kembali ke Detail Utang' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Detail Transaksi Utang' }),
+    ).toBeInTheDocument();
+    await catat('26000');
+    expect(
+      screen.getByText('Status pembayaran otomatis menjadi Lunas saat saldo mencapai Rp0.'),
+    ).toBeInTheDocument();
 
-    expect(await screen.findByText('Tidak ada utang aktif')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Lihat Daftar Utang' }));
+    expect(
+      await screen.findByText('Semua transaksi utang sudah lunas atau belum ada transaksi utang.'),
+    ).toBeInTheDocument();
   });
 
   it('riwayat cicilan kosong sebelum ada pembayaran', async () => {
-    renderAt('/utang', <DebtsPage />);
-    await screen.findByText('Pak Budi');
-    await userEvent.click(screen.getByRole('button', { name: 'Riwayat cicilan' }));
-    expect(getDialog().getByText('Belum ada cicilan untuk transaksi ini.')).toBeInTheDocument();
+    await bukaDetailPakBudi();
+    const riwayat = within(screen.getByRole('region', { name: 'Riwayat cicilan' }));
+    expect(await riwayat.findByText('Belum ada cicilan untuk transaksi ini.')).toBeInTheDocument();
   });
 });

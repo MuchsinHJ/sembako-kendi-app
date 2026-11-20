@@ -56,8 +56,8 @@ export function useProductCategories(params?: { status?: StatusFilter; tipe?: Ti
       const res = await listProductsApi({
         page: 1,
         limit: 100,
-        status: params?.status,
-        tipe: params?.tipe,
+        ...(params?.status ? { status: params.status } : {}),
+        ...(params?.tipe ? { tipe: params.tipe } : {}),
       });
       return daftarKategori(res.data.map((p) => p.kategori));
     },

@@ -47,7 +47,7 @@ describe('Daftar Penitip', () => {
     renderAt('/penitip', '/penitip', <DaftarPenitipPage />);
     await screen.findByText('Bu Rina');
 
-    await userEvent.type(screen.getByPlaceholderText(/cari penitip/i), 'joko');
+    await userEvent.type(screen.getByPlaceholderText(/cari nama penitip/i), 'joko');
 
     expect(await screen.findByText('Pak Joko')).toBeInTheDocument();
     await waitFor(() => {
@@ -66,6 +66,26 @@ describe('Daftar Penitip', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: /bu rina/i }));
     expect(await screen.findByText('Saldo kewajiban ke penitip')).toBeInTheDocument();
+  });
+
+  it('tambah penitip baru via modal Tambah Penitip', async () => {
+    renderAt('/penitip', '/penitip', <DaftarPenitipPage />);
+    await screen.findByText('Bu Rina');
+
+    const tambahBtns = screen.getAllByRole('button', { name: /tambah penitip/i });
+    expect(tambahBtns[0]).toBeDefined();
+    const tambahBtn = tambahBtns[0];
+    if (!tambahBtn) throw new Error('tombol tambah penitip tidak ada');
+    await userEvent.click(tambahBtn);
+
+    const dlg = getDialog();
+    expect(dlg.getByText('Tambah Penitip')).toBeInTheDocument();
+
+    await userEvent.type(dlg.getByLabelText(/nama penitip/i), 'Bu Ratna Baru');
+    await userEvent.type(dlg.getByLabelText(/nomor hp/i), '0812-9999-8888');
+    await userEvent.click(dlg.getByRole('button', { name: 'Simpan Penitip' }));
+
+    expect(await screen.findByText('Bu Ratna Baru')).toBeInTheDocument();
   });
 });
 
@@ -95,14 +115,14 @@ describe('Detail Penitip (c1: saldo negatif)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Catat Setoran' }));
 
     const dlg = getDialog();
-    const input = dlg.getByLabelText('Nominal setoran');
+    const input = dlg.getByLabelText('Jumlah setoran');
 
     await userEvent.type(input, '0');
     expect(dlg.getByRole('button', { name: 'Simpan Setoran' })).toBeDisabled();
 
     await userEvent.clear(input);
     await userEvent.type(input, '130000');
-    expect(dlg.getByText(/Nominal setoran melebihi saldo kewajiban/)).toBeInTheDocument();
+    expect(dlg.getByText(/Jumlah setoran melebihi saldo kewajiban/)).toBeInTheDocument();
     expect(dlg.getByRole('button', { name: 'Simpan Setoran' })).toBeDisabled();
   });
 
@@ -133,6 +153,30 @@ describe('Detail Penitip (c1: saldo negatif)', () => {
 
     const dlg = getDialog();
     expect(await dlg.findByText('Rokok (titipan)')).toBeInTheDocument();
-    expect(dlg.getByText(/Rp30\.000 · Stok 8/)).toBeInTheDocument();
+    expect(dlg.getByText(/Stok 8 · Rp30\.000/)).toBeInTheDocument();
+  });
+
+  it('edit data penitip via modal Edit Penitip', async () => {
+    renderAt('/penitip/:id', '/penitip/c2', <DetailPenitipPage />);
+    await screen.findByText('Saldo kewajiban ke penitip');
+
+    const editBtns = screen.getAllByRole('button', { name: /edit penitip/i });
+    expect(editBtns[0]).toBeDefined();
+    const editBtn = editBtns[0];
+    if (!editBtn) throw new Error('tombol edit penitip tidak ada');
+    await userEvent.click(editBtn);
+
+    const dlg = getDialog();
+    expect(dlg.getByText('Edit Penitip')).toBeInTheDocument();
+    expect(dlg.getByLabelText(/nama penitip/i)).toHaveValue('Pak Joko');
+
+    const catatanInput = dlg.getByLabelText(/catatan/i);
+    await userEvent.clear(catatanInput);
+    await userEvent.type(catatanInput, 'Setoran setiap Rabu');
+    await userEvent.click(dlg.getByRole('button', { name: 'Simpan Perubahan' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

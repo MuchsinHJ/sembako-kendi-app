@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { CircleAlert, Eye, EyeOff, Store } from 'lucide-react';
 import { useLogin } from './api';
 import { loginSchema, type LoginInput } from './schemas';
 import { LOGIN_FAIL_MESSAGE } from './api';
@@ -10,8 +11,8 @@ import { cn } from '@/lib/cn';
 type FieldErrors = Partial<Record<keyof LoginInput, string | undefined>>;
 
 /**
- * Layar Login (SDD FE §4.1, layar tanpa chrome). Antislop: satu fokus
- * visual (kartu login di latar bg), eyebrow kapital, tanpa shadow.
+ * Layar Login (pen m5RMuh / Y1Gj12). Mobile: tanpa kartu, logo 56px + teks brand,
+ * form gap 16, error di kotak warning. md+: panel brand kiri + kartu form (06 §5.10).
  */
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -48,12 +50,19 @@ export function LoginPage() {
     });
   }
 
+  const inputBox = (invalid: boolean) =>
+    cn(
+      'flex h-12 w-full items-center gap-2 rounded-input border bg-surface px-3.5',
+      'transition-[border-color,box-shadow] duration-150 ease-out focus-within:ring-2 focus-within:ring-accent/40',
+      invalid ? 'border-danger' : 'border-line',
+    );
+
   return (
     <main className="flex min-h-dvh bg-bg">
       {/* Panel kiri brand (06 §5.10) — md+ */}
       <div className="hidden flex-1 items-center justify-center bg-primary px-10 md:flex">
         <div className="max-w-sm">
-          <span className="eyebrow block text-xs font-semibold tracking-[1.2px] text-accent-soft">
+          <span className="block text-xs font-semibold tracking-[1.2px] text-accent-soft">
             KENDI&apos;S MARKET
           </span>
           <h1 className="mt-3 text-3xl font-bold leading-tight text-bg">
@@ -66,88 +75,111 @@ export function LoginPage() {
         </div>
       </div>
 
-      {/* Panel kanan: form (06 §5.10) */}
-      <div className="flex w-full flex-1 items-center justify-center px-6 py-10">
-        <form
-          onSubmit={onSubmit}
-          className="w-full max-w-sm rounded-card border border-line-soft bg-surface p-6"
-          noValidate
-        >
-          <span className="eyebrow mb-2 block text-xs font-semibold tracking-[1.2px] text-accent md:hidden">
-            KENDI&apos;S MARKET
-          </span>
-          <h1 className="mb-6 text-2xl font-bold">Masuk ke akun usaha Anda</h1>
+      {/* Form: mobile pen Content pad [0,28,32,28] gap 28 justify center */}
+      <div className="flex w-full flex-1 flex-col justify-center px-7 pb-8 pt-10 md:items-center md:px-6 md:py-10">
+        <div className="flex w-full flex-col gap-7 md:max-w-sm md:rounded-card md:border md:border-line-soft md:bg-surface md:p-6">
+          {/* Blok Brand (pen gap 14) */}
+          <div className="flex flex-col gap-3.5">
+            <div className="flex size-14 items-center justify-center rounded-[16px] bg-primary md:hidden">
+              <Store className="size-[26px] text-bg" aria-hidden="true" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold tracking-[1.4px] text-accent">
+                KENDI&apos;S MARKET
+              </span>
+              <h1 className="text-[26px] font-bold leading-tight text-primary">
+                Masuk ke akun usaha Anda
+              </h1>
+              <p className="text-[13px] text-muted">
+                Kelola penjualan, stok, dan utang usaha dalam satu tempat.
+              </p>
+            </div>
+          </div>
 
-        <label htmlFor="email" className="mb-1 block text-sm font-semibold text-primary-soft">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          placeholder="kasir@kendismarket.id"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={cn(
-            'mb-1 h-12 w-full rounded-input border bg-surface px-4 text-base text-primary',
-            'focus:outline-none',
-            errors.email ? 'border-danger' : 'border-line'
-          )}
-          aria-invalid={!!errors.email}
-          aria-describedby={errors.email ? 'email-error' : undefined}
-        />
-        {errors.email && (
-          <p id="email-error" className="mb-2 text-xs font-medium text-danger">
-            {errors.email}
-          </p>
-        )}
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="email" className="text-[12.5px] font-medium text-primary-soft">
+                Email
+              </label>
+              <div className={inputBox(!!errors.email)}>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  placeholder="kasir@kendismarket.id"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-full w-full min-w-0 bg-transparent text-sm text-primary placeholder:text-muted focus:outline-none"
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'email-error' : undefined}
+                />
+              </div>
+              {errors.email && (
+                <p id="email-error" className="text-xs font-medium text-danger">
+                  {errors.email}
+                </p>
+              )}
+            </div>
 
-        <label htmlFor="password" className="mb-1 mt-3 block text-sm font-semibold text-primary-soft">
-          Kata sandi
-        </label>
-        <input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={cn(
-            'mb-1 h-12 w-full rounded-input border bg-surface px-4 text-base text-primary',
-            'focus:outline-none',
-            errors.password ? 'border-danger' : 'border-line'
-          )}
-          aria-invalid={!!errors.password}
-          aria-describedby={errors.password ? 'password-error' : undefined}
-        />
-        {errors.password && (
-          <p id="password-error" className="mb-2 text-xs font-medium text-danger">
-            {errors.password}
-          </p>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="password" className="text-[12.5px] font-medium text-primary-soft">
+                Kata sandi
+              </label>
+              <div className={cn(inputBox(!!errors.password), 'pe-1')}>
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-full w-full min-w-0 bg-transparent text-sm text-primary placeholder:text-muted focus:outline-none"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? 'password-error' : undefined}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
+                  aria-pressed={showPassword}
+                  className="press-scale flex size-10 shrink-0 items-center justify-center rounded-full text-muted transition-colors duration-150 ease-out hover:bg-surface-muted"
+                >
+                  {showPassword ? (
+                    <EyeOff className="size-[18px]" aria-hidden="true" />
+                  ) : (
+                    <Eye className="size-[18px]" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              {errors.password && (
+                <p id="password-error" className="text-xs font-medium text-danger">
+                  {errors.password}
+                </p>
+              )}
+            </div>
 
-        {formError && (
-          <p role="alert" className="mb-2 text-sm font-medium text-danger">
-            {formError}
-          </p>
-        )}
+            {/* Pesan Error Login (pen): warning-soft r12 p[10,12] gap 8 + stroke warning */}
+            {formError && (
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-[12px] border border-warning bg-warning-soft px-3 py-2.5"
+              >
+                <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden="true" />
+                <p className="text-xs text-warning">{formError}</p>
+              </div>
+            )}
 
-        <button
-          type="submit"
-          disabled={login.isPending}
-          className="press-scale mt-4 h-12 w-full rounded-full bg-primary text-bg font-semibold disabled:opacity-60"
-        >
-          {login.isPending ? 'Memasuki…' : 'Masuk'}
-        </button>
+            <button
+              type="submit"
+              disabled={login.isPending}
+              className="press-scale h-[50px] w-full rounded-full bg-primary text-[15px] font-semibold text-bg transition-[background-color,transform] duration-150 ease-out hover:bg-primary-soft disabled:opacity-60"
+            >
+              {login.isPending ? 'Memasuki…' : 'Masuk'}
+            </button>
+          </form>
 
-        <p className="mt-4 text-center text-xs text-muted">
-          Lupa kata sandi? Hubungi pengelola usaha Anda.
-        </p>
-
-        {/* Penanda kecil: satu akun toko (MVP). */}
-        <p className="mt-4 text-center text-xs text-muted">
-          Kendi&apos;s Market untuk satu toko — akun dikelola pemilik.
-        </p>
-        </form>
+          <p className="text-xs text-muted">Lupa kata sandi? Hubungi pengelola usaha Anda.</p>
+        </div>
       </div>
     </main>
   );

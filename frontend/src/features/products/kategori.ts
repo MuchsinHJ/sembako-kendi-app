@@ -47,6 +47,21 @@ export function daftarKategori(values: string[]): OpsiKategori[] {
     .sort((a, b) => a.label.localeCompare(b.label, 'id'));
 }
 
+/** "Sembako · Milik Sendiri" / "Minuman · Titipan Bu Ratna" (pen baris Katalog). */
+export function labelKategoriTipe(product: {
+  kategori: string;
+  tipe: 'MILIK_SENDIRI' | 'TITIPAN';
+  consignor?: { nama: string } | null;
+}): string {
+  const tipe =
+    product.tipe === 'TITIPAN'
+      ? product.consignor?.nama
+        ? `Titipan ${product.consignor.nama}`
+        : 'Titipan'
+      : 'Milik Sendiri';
+  return `${product.kategori} · ${tipe}`;
+}
+
 /** Gabungkan daftar opsi kategori tanpa duplikasi, diurutkan alfabetis. */
 export function gabungKategori(...lists: OpsiKategori[][]): OpsiKategori[] {
   const seen = new Map<string, string>();

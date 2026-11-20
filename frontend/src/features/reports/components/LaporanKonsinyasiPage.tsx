@@ -1,37 +1,57 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { useConsignmentReport } from '../api';
-import { DateRangePicker, SummaryStat } from './shared';
+import { PeriodFilter } from './shared';
 import { useDefaultMonthRange } from '../utils';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { formatRupiah } from '@/lib/money';
+import { cn } from '@/lib/cn';
 
-/** Laporan Konsinyasi per penitip — TANPA tombol ekspor (SDD §5.8). */
+function Metrik({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-px">
+      <span className="text-[10px] text-muted">{label}</span>
+      <span className="truncate text-xs font-semibold tabular-nums text-primary-soft">{value}</span>
+    </div>
+  );
+}
+
+/** Laporan Konsinyasi (pen t2Nfa) — per penitip, TANPA ekspor (SDD §5.8). */
 export function LaporanKonsinyasiPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useState(useDefaultMonthRange());
+  const defaultRange = useDefaultMonthRange();
+  const [range, setRange] = useState(defaultRange);
   const { data, isLoading, isError, refetch } = useConsignmentReport(range);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2.5">
       <ScreenHeader
         onBack={() => navigate('/laporan/penjualan')}
-        title="Konsinyasi"
-        subtitle="Laporan per penitip"
+        title="Laporan Konsinyasi"
+        titleClassName="text-[21px]"
+        subtitle="Rekap penjualan titipan per penitip"
       />
 
-      <DateRangePicker range={range} onChange={setRange} />
+      <PeriodFilter
+        range={range}
+        onChange={setRange}
+        defaultRange={defaultRange}
+        label="Periode"
+        compact
+      />
+      <p className="text-[11px] text-muted">
+        Saldo akhir dihitung dari seluruh riwayat (all-time), bukan hanya periode ini.
+      </p>
 
       {isLoading && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="h-24 animate-pulse rounded-card border border-line-soft bg-surface" />
-            <div className="h-24 animate-pulse rounded-card border border-line-soft bg-surface" />
-          </div>
-          <div className="h-52 animate-pulse rounded-card border border-line-soft bg-surface" />
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <div className="h-[84px] animate-pulse rounded-[16px] bg-primary/10" />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-[92px] animate-pulse rounded-[14px] bg-surface" />
+          ))}
         </div>
       )}
 
@@ -46,57 +66,73 @@ export function LaporanKonsinyasiPage() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <SummaryStat label="Modal periode" value={formatRupiah(data.totalModalPeriode)} />
-            <SummaryStat label="Disetor periode" value={formatRupiah(data.totalDisetorPeriode)} />
-            <SummaryStat label="Saldo akhir (all-time)" value={formatRupiah(data.totalSaldoAkhir)} accent />
+          {/* Ringkasan Periode (pen): primary r16 p[12,14] gap2 */}
+          <div className="flex flex-col gap-0.5 rounded-[16px] bg-primary px-3.5 py-3">
+            <span className="text-[11.5px] text-accent-soft">Tambahan kewajiban periode ini</span>
+            <span className="text-2xl font-bold leading-tight tabular-nums text-bg">
+              {formatRupiah(data.totalModalPeriode)}
+            </span>
+            <span className="text-[11px] text-accent-soft">
+              Sudah disetor {formatRupiah(data.totalDisetorPeriode)} · saldo akhir all-time{' '}
+              {formatRupiah(data.totalSaldoAkhir)}
+            </span>
           </div>
 
-          <Card variant="list" className="flex flex-col gap-1.5">
-            {/* Header (canvas kSUlr): mobile 3 kolom; md+ 4 kolom (Terjual | Kewajiban | Disetor | Saldo). */}
-            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted md:grid-cols-[1fr_auto_auto_auto_auto]">
-              <span>Penitip</span>
-              <span className="text-right">Terjual</span>
-              <span className="hidden text-right md:inline">Kewajiban</span>
-              <span className="hidden text-right md:inline">Disetor</span>
-              <span className="text-right">Saldo akhir</span>
-            </div>
-            {data.consignors.map((c) => (
-              <div
-                key={c.consignorId}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-line-soft py-2.5 md:grid-cols-[1fr_auto_auto_auto_auto]"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-primary">{c.nama}</p>
-                  {/* Kewajiban + Disetor pindah ke kolom md+; mobile tetap subtitle ringkas. */}
-                  <p className="text-xs text-muted md:hidden">
-                    Modal {formatRupiah(c.modalPeriode)} · Setor {formatRupiah(c.disetorPeriode)}
-                  </p>
+          {/* Daftar per penitip (pen Baris Laporan): surface r14 p12 gap8 */}
+          <div className="flex flex-col gap-2">
+            {data.consignors.length === 0 && (
+              <p className="rounded-[14px] bg-surface p-4 text-center text-xs text-muted">
+                Belum ada penitip.
+              </p>
+            )}
+            {data.consignors.map((c) => {
+              const saldo = Number(c.saldoAkhir);
+              return (
+                <div
+                  key={c.consignorId}
+                  className="flex flex-col gap-2 rounded-[14px] border border-line-soft bg-surface p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-col gap-px">
+                      <span className="truncate text-[13.5px] font-semibold text-primary">
+                        {c.nama}
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        {c.status === 'NONAKTIF' ? 'Penitip nonaktif' : 'Penitip aktif'}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-px">
+                      <span className="text-[10px] text-muted">Saldo akhir</span>
+                      <span
+                        className={cn(
+                          'text-sm font-bold tabular-nums',
+                          saldo < 0 ? 'text-danger' : saldo === 0 ? 'text-muted' : 'text-primary',
+                        )}
+                      >
+                        {formatRupiah(c.saldoAkhir)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Metrik label="Penjualan" value={formatRupiah(c.terjualPeriode)} />
+                    <Metrik label="Kewajiban periode" value={formatRupiah(c.modalPeriode)} />
+                    <Metrik label="Disetor periode" value={formatRupiah(c.disetorPeriode)} />
+                  </div>
                 </div>
-                <span className="text-sm font-semibold text-primary">{formatRupiah(c.terjualPeriode)}</span>
-                <span className="hidden text-right text-xs font-medium text-muted md:inline">
-                  {formatRupiah(c.modalPeriode)}
-                </span>
-                <span className="hidden text-right text-xs font-medium text-muted md:inline">
-                  {formatRupiah(c.disetorPeriode)}
-                </span>
-                <span className="text-sm font-bold text-primary">{formatRupiah(c.saldoAkhir)}</span>
-              </div>
-            ))}
-          </Card>
+              );
+            })}
+          </div>
 
-          <p className="text-xs text-muted">
-            Saldo akhir dihitung dari seluruh riwayat (all-time), bukan hanya periode ini. Semua penitip
-            termasuk nonaktif ditampilkan.
-          </p>
+          {/* Catatan Tanpa Ekspor (pen): surface-muted r12 p8 */}
+          <div className="flex items-center gap-2 rounded-[12px] bg-surface-muted p-2">
+            <Info className="size-3.5 shrink-0 text-muted" aria-hidden="true" />
+            <p className="text-[11px] text-muted">
+              Laporan konsinyasi tidak bisa diekspor. Semua penitip ikut tampil, termasuk yang
+              nonaktif.
+            </p>
+          </div>
         </>
       )}
-
-      <div className="flex">
-        <Button variant="secondary" onClick={() => navigate('/laporan/penjualan')}>
-          <ArrowLeft className="size-4" aria-hidden="true" /> Kembali ke Penjualan
-        </Button>
-      </div>
     </div>
   );
 }

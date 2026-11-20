@@ -66,8 +66,8 @@ describe('Katalog', () => {
   it('pencarian tanpa hasil: pesan + hapus pencarian', async () => {
     renderCatalog();
     await userEvent.type(await screen.findByRole('searchbox'), 'tidak-ada');
-    expect(await screen.findByText(/Tidak ada produk untuk/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Hapus pencarian' }));
+    expect(await screen.findByText('Produk tidak ditemukan')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Kosongkan Pencarian' }));
     expect(await screen.findByText('Beras 5kg')).toBeInTheDocument();
   });
 
@@ -163,19 +163,19 @@ describe('Katalog', () => {
     renderCatalog();
     await clickTambahProduk();
 
-    await userEvent.type(screen.getByLabelText('Nama produk'), 'Mie Instan');
+    await userEvent.type(screen.getByLabelText(/^Nama Produk/), 'Mie Instan');
     await userEvent.type(screen.getByLabelText('Kategori'), 'Sembako');
-    await userEvent.type(screen.getByLabelText('Harga jual'), '3500');
-    await userEvent.type(screen.getByLabelText('Harga modal'), '3000');
-    await userEvent.type(screen.getByLabelText('Stok awal'), '10');
-    await userEvent.type(screen.getByLabelText('Stok minimum'), '5');
+    await userEvent.type(screen.getByLabelText(/^Harga Jual/), '3500');
+    await userEvent.type(screen.getByLabelText(/^Harga Modal/), '3000');
+    await userEvent.type(screen.getByLabelText(/^Stok Awal/), '10');
+    await userEvent.type(screen.getByLabelText(/^Stok Minimum/), '5');
 
     const file = new File(['foto'], 'foto.png', { type: 'image/png' });
     await userEvent.upload(screen.getByLabelText(/pilih foto/i), file);
 
     await userEvent.click(screen.getByRole('button', { name: 'Simpan Produk' }));
 
-    await waitFor(() => expect(captured).toBeDefined());
+    await waitFor(() => expect(captured).not.toBeNull());
     const body = captured as Record<string, unknown>;
     expect(body.nama).toBe('Mie Instan');
     expect(body.stok).toBe(10);
@@ -184,6 +184,66 @@ describe('Katalog', () => {
     await waitFor(() => expect(photoSpy).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await screen.findByText('Mie Instan', {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
+  it('tambah produk titipan dengan quick-add penitip baru langsung dari form produk', async () => {
+    let captured: unknown = null;
+    server.use(
+      http.post('*/api/v1/products', async ({ request }) => {
+        captured = await request.json();
+        const created: FixtureProduct = {
+          ...produk1,
+          id: 'p-titipan-baru',
+          nama: 'Keripik Tempe',
+          tipe: 'TITIPAN',
+          stok: 20,
+        };
+        registerProduct(created);
+        return HttpResponse.json({ success: true, data: created }, { status: 201 });
+      })
+    );
+
+    renderCatalog();
+    await clickTambahProduk();
+
+    await userEvent.type(screen.getByLabelText(/^Nama Produk/), 'Keripik Tempe');
+    await userEvent.type(screen.getByLabelText('Kategori'), 'Makanan');
+    await userEvent.type(screen.getByLabelText(/^Harga Jual/), '15000');
+    await userEvent.type(screen.getByLabelText(/^Harga Modal/), '12000');
+
+    // Pilih tipe Titipan
+    const productDialog = screen.getByRole('dialog');
+    await userEvent.click(within(productDialog).getByRole('radio', { name: 'Titipan' }));
+
+    // Klik tombol quick-add penitip baru
+    const tambahPenitipBtn = await within(productDialog).findByRole('button', { name: /tambah penitip baru/i });
+    await userEvent.click(tambahPenitipBtn);
+
+    // Dialog Tambah Penitip muncul di atas form
+    const dialogs = screen.getAllByRole('dialog');
+    const penitipDialog = dialogs[dialogs.length - 1];
+    if (!penitipDialog) throw new Error('dialog penitip tidak ada');
+    await userEvent.type(within(penitipDialog).getByLabelText(/nama penitip/i), 'Bu Ratna Snack');
+    await userEvent.click(within(penitipDialog).getByRole('button', { name: 'Simpan Penitip' }));
+
+    // Setelah simpan, dialog penitip tertutup dan penitip baru auto-selected
+    await waitFor(() => {
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    });
+
+    const selectPenitip = within(productDialog).getByLabelText(/^Penitip/) as HTMLSelectElement;
+    await waitFor(() => {
+      expect(selectPenitip.selectedOptions[0]?.text).toBe('Bu Ratna Snack');
+    });
+
+    // Simpan produk
+    await userEvent.click(within(productDialog).getByRole('button', { name: 'Simpan Produk' }));
+
+    await waitFor(() => expect(captured).not.toBeNull());
+    const body = captured as Record<string, unknown>;
+    expect(body.nama).toBe('Keripik Tempe');
+    expect(body.tipe).toBe('TITIPAN');
+    expect(body.consignorId).toBeTruthy();
   });
 });
 
@@ -213,14 +273,14 @@ describe('Detail Produk', () => {
     renderDetail('p1');
     await userEvent.click(await screen.findByRole('button', { name: 'Edit Produk' }));
 
-    const namaInput = screen.getByLabelText('Nama produk');
+    const namaInput = screen.getByLabelText(/^Nama Produk/);
     expect(namaInput).toHaveValue('Beras 5kg');
 
     await userEvent.clear(namaInput);
     await userEvent.type(namaInput, 'Beras 10kg');
     await userEvent.click(screen.getByRole('button', { name: 'Simpan Perubahan' }));
 
-    await waitFor(() => expect(captured).toBeDefined());
+    await waitFor(() => expect(captured).not.toBeNull());
     const body = captured as Record<string, unknown>;
     expect(body.nama).toBe('Beras 10kg');
     expect(body).not.toHaveProperty('stok');
@@ -237,9 +297,9 @@ describe('Detail Produk', () => {
     );
     renderDetail('p1');
     await userEvent.click(await screen.findByRole('button', { name: 'Nonaktifkan Produk' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Nonaktifkan' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Nonaktifkan Produk' }));
 
-    await waitFor(() => expect(captured).toBeDefined());
+    await waitFor(() => expect(captured).not.toBeNull());
     expect(captured).toEqual({ status: 'NONAKTIF' });
   });
 
@@ -262,7 +322,7 @@ describe('Detail Produk', () => {
       })
     );
 
-    await waitFor(() => expect(captured).toBeDefined());
+    await waitFor(() => expect(captured).not.toBeNull());
     expect(captured).toEqual({ status: 'NONAKTIF' });
   });
 
@@ -292,11 +352,11 @@ describe('Terima Titipan & Retur ke Penitip', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Terima Titipan' }));
 
     const dlg = within(await screen.findByRole('dialog'));
-    const jumlahInput = dlg.getByLabelText('Jumlah titipan');
+    const jumlahInput = dlg.getByLabelText('Jumlah diterima');
     fireEvent.change(jumlahInput, { target: { value: '2' } });
     await userEvent.click(dlg.getByRole('button', { name: 'Simpan Penerimaan' }));
 
-    await waitFor(() => expect(captured).toBeDefined());
+    await waitFor(() => expect(captured).not.toBeNull());
     expect(captured).toMatchObject({ productId: 'p4', jumlah: 2 });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
@@ -306,7 +366,7 @@ describe('Terima Titipan & Retur ke Penitip', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Retur ke Penitip' }));
 
     const dlg = within(await screen.findByRole('dialog'));
-    fireEvent.change(dlg.getByLabelText('Jumlah titipan'), { target: { value: '99' } });
+    fireEvent.change(dlg.getByLabelText('Jumlah diretur'), { target: { value: '99' } });
 
     expect(dlg.getByText(/Jumlah retur melebihi stok tersedia/)).toBeInTheDocument();
     expect(dlg.getByRole('button', { name: 'Simpan Retur' })).toBeDisabled();
@@ -337,30 +397,30 @@ describe('Sesuaikan Stok', () => {
     );
     const dlg = await openAdjust();
 
-    expect(dlg.getByText('Stok setelah penyimpanan:')).toBeInTheDocument();
-    await userEvent.click(dlg.getByRole('radio', { name: 'Kurangi' }));
+    expect(dlg.getByText('Setelah disimpan')).toBeInTheDocument();
+    await userEvent.click(dlg.getByRole('radio', { name: 'Kurangi Stok' }));
     await userEvent.click(dlg.getByRole('button', { name: 'Barang rusak' }));
 
-    await userEvent.click(dlg.getByRole('button', { name: 'Simpan Penyesuaian' }));
+    await userEvent.click(dlg.getByRole('button', { name: /^(Tambahkan|Kurangi) \d+ Unit$/ }));
 
-    await waitFor(() => expect(captured).toBeDefined());
+    await waitFor(() => expect(captured).not.toBeNull());
     expect(captured).toEqual({ delta: -1, alasan: 'Barang rusak' });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('pengurangan melebihi stok: pesan perbaikan + tombol disabled', async () => {
     const dlg = await openAdjust();
-    await userEvent.click(dlg.getByRole('radio', { name: 'Kurangi' }));
+    await userEvent.click(dlg.getByRole('radio', { name: 'Kurangi Stok' }));
     const jumlahInput = dlg.getByLabelText('Jumlah penyesuaian');
     await userEvent.clear(jumlahInput);
     await userEvent.type(jumlahInput, '99');
 
     expect(dlg.getByText('Jumlah pengurangan melebihi stok saat ini. Stok tersisa 12.')).toBeInTheDocument();
-    expect(dlg.getByRole('button', { name: 'Simpan Penyesuaian' })).toBeDisabled();
+    expect(dlg.getByRole('button', { name: /^(Tambahkan|Kurangi) \d+ Unit$/ })).toBeDisabled();
   });
 
   it('alasan kosong: tombol disabled', async () => {
     const dlg = await openAdjust();
-    expect(dlg.getByRole('button', { name: 'Simpan Penyesuaian' })).toBeDisabled();
+    expect(dlg.getByRole('button', { name: /^(Tambahkan|Kurangi) \d+ Unit$/ })).toBeDisabled();
   });
 });
