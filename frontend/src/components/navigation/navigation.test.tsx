@@ -62,13 +62,13 @@ describe('SidebarNav', () => {
     expect(screen.getAllByRole('link')).toHaveLength(7);
     expect(getAside()).toHaveClass('w-24');
     expect(getAside()).toHaveClass('md:flex');
-    expect(getAside()).toHaveClass('lg:hidden');
+    expect(getAside()).toHaveClass('xl:hidden');
   });
 
   it('desktop: lebar 248px + hanya tampil ≥1280px', () => {
     renderNav(<SidebarNav variant="desktop" />);
     expect(getAside()).toHaveClass('w-[248px]');
-    expect(getAside()).toHaveClass('lg:flex');
+    expect(getAside()).toHaveClass('xl:flex');
   });
 
   it('Laporan aktif di sub-route laporan', () => {

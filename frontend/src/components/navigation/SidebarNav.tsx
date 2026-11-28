@@ -57,15 +57,22 @@ export function SidebarNav({ variant }: SidebarNavProps) {
       role="complementary"
       className={cn(
         'fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-line bg-surface',
-        tablet ? 'w-24 md:flex lg:hidden' : 'w-[248px] lg:flex'
+        tablet ? 'w-24 md:flex xl:hidden' : 'w-[248px] xl:flex',
       )}
     >
       <div className={cn('flex flex-col gap-1.5', tablet ? 'items-center px-3 py-6' : 'px-4 py-7')}>
-        <span className="text-[11px] font-bold tracking-[1.2px] text-primary">KENDI&apos;S MARKET</span>
+        <span className="text-[11px] font-bold tracking-[1.2px] text-primary">
+          KENDI&apos;S MARKET
+        </span>
         {!tablet && <span className="text-xs text-muted">Kelola toko lebih mudah</span>}
       </div>
 
-      <nav className={cn('flex flex-1 flex-col gap-1.5 overflow-y-auto', tablet ? 'items-center px-3' : 'px-4')}>
+      <nav
+        className={cn(
+          'flex flex-1 flex-col gap-1.5 overflow-y-auto',
+          tablet ? 'items-center px-3' : 'px-4',
+        )}
+      >
         {ITEMS.map((item) => {
           const active = isItemActive(pathname, item.to);
           const Icon = item.icon;
@@ -75,9 +82,11 @@ export function SidebarNav({ variant }: SidebarNavProps) {
               to={item.to}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'press-scale flex items-center justify-center rounded-input text-[13px] transition-colors duration-150 ease-out',
-                tablet ? 'h-16 w-full flex-col gap-1 px-1.5 py-3' : 'h-11 w-full gap-[11px] px-4',
-                active ? 'bg-primary' : 'bg-surface hover:bg-surface-muted'
+                'press-scale flex items-center rounded-input text-[13px] transition-colors duration-150 ease-out',
+                tablet
+                  ? 'h-16 w-full flex-col justify-center gap-1 px-1.5 py-3'
+                  : 'h-11 w-full justify-start gap-[11px] px-4 text-sm',
+                active ? 'bg-primary' : 'bg-surface hover:bg-surface-muted',
               )}
             >
               <Icon
@@ -85,7 +94,12 @@ export function SidebarNav({ variant }: SidebarNavProps) {
                 className={cn('size-[18px] shrink-0', active ? 'text-bg' : 'text-accent')}
                 strokeWidth={active ? 2.5 : 2}
               />
-              <span className={cn('leading-none', active ? 'font-semibold text-bg' : 'font-medium text-primary-soft')}>
+              <span
+                className={cn(
+                  'leading-none',
+                  active ? 'font-semibold text-bg' : 'font-medium text-primary-soft',
+                )}
+              >
                 {item.label}
               </span>
             </NavLink>
@@ -93,7 +107,12 @@ export function SidebarNav({ variant }: SidebarNavProps) {
         })}
       </nav>
 
-      <div className={cn('mt-auto flex flex-col gap-3 border-t border-line-soft py-4', tablet ? 'items-center px-3' : 'px-4')}>
+      <div
+        className={cn(
+          'mt-auto flex flex-col gap-3 border-t border-line-soft py-4',
+          tablet ? 'items-center px-3' : 'px-4',
+        )}
+      >
         <div className={cn('flex items-center gap-3', tablet && 'flex-col gap-2')}>
           <span
             aria-hidden="true"
@@ -103,8 +122,8 @@ export function SidebarNav({ variant }: SidebarNavProps) {
           </span>
           {!tablet && (
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12.5px] font-semibold text-primary">Kendi</span>
-              <span className="block truncate text-[10.5px] text-muted">Pemilik usaha</span>
+              <span className="block truncate text-[13px] font-semibold text-primary">Kendi</span>
+              <span className="block truncate text-xs text-muted">Pemilik usaha</span>
             </span>
           )}
           <Button

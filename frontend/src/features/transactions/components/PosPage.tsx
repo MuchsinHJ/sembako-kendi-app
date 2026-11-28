@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Package, Plus, ShoppingBasket } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { useProductCategories, useProducts } from '@/features/products/api';
+import { useProductCategories, useProducts, useProductsPage } from '@/features/products/api';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ChipFilter } from '@/components/ChipFilter';
+import { Pagination } from '@/components/Pagination';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { SearchField } from '@/components/SearchField';
 import { formatRupiah } from '@/lib/money';
 import { formatTanggalPanjang } from '@/lib/date';
 import { ApiError } from '@/lib/http';
 import { cn } from '@/lib/cn';
+import { MQ } from '@/lib/breakpoints';
 import { useMediaQuery } from '@/lib/useMediaQuery';
 import { daftarKategori, gabungKategori } from '@/features/products/kategori';
 import { useCreateTransaction } from '../api';
-import { CartForm } from './CartForm';
 import { BerhasilStep, KeranjangStep, KonfirmasiStep } from './PosCheckout';
 import { ringkasItem, totalKeranjang } from '../utils';
 import type { CartItem, Transaction } from '../types';
@@ -22,6 +23,7 @@ import type { Product } from '@/features/products/types';
 
 type Langkah = 'pilih' | 'keranjang' | 'konfirmasi' | 'berhasil';
 const LANGKAH: readonly Langkah[] = ['pilih', 'keranjang', 'konfirmasi', 'berhasil'];
+type LangkahPanel = 'keranjang' | 'konfirmasi' | 'berhasil';
 
 /**
  * Baris produk POS mobile (pen Produk - Beras Ramos 5 kg): h56 p6 gap10 surface r14,
@@ -92,8 +94,13 @@ function ProductRow({
   );
 }
 
-/** Kartu produk POS md+ (canvas uGvXh): gambar besar + nama + harga + stok + tombol + bulat. */
-function ProductCard({
+/**
+ * Tile produk POS md+ (turunan baris mobile, menyimpang dari kartu bergambar besar .pen uGvXh):
+ * thumb 64 r12 + nama 2 baris + harga 15/700 + stok, tombol + 44 di kanan bawah.
+ * Lebih padat (≈4 baris terlihat di 1024×768) dan tetap nyaman disentuh.
+ * Garis primary-soft menandai produk yang sudah di keranjang (+ label jumlah).
+ */
+function ProductTile({
   product,
   qty,
   onChange,
@@ -102,59 +109,93 @@ function ProductCard({
   qty: number;
   onChange: (p: Product, q: number) => void;
 }) {
+  const habis = qty >= product.stok;
+  const menipis = product.stok <= product.stokMinimum;
   return (
-    <div className="flex flex-col gap-2 rounded-[16px] border border-line-soft bg-surface p-3">
-      <Link
-        to={`/produk/${product.id}`}
-        className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-card-sm bg-surface-muted"
-        aria-label={`Lihat ${product.nama}`}
-      >
-        {product.fotoUrl ? (
-          <img src={product.fotoUrl} alt="" className="size-full object-cover" />
-        ) : (
-          <Package className="size-10 text-accent" aria-hidden="true" />
-        )}
-      </Link>
-      <p className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-primary">
-        {product.nama}
-      </p>
-      <p className="text-[15px] font-bold tabular-nums text-primary">
-        {formatRupiah(product.hargaJual)}
-      </p>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-muted">Stok {product.stok}</span>
-        <button
-          type="button"
-          aria-label={`Tambah ${product.nama}`}
-          disabled={qty >= product.stok}
-          onClick={() => onChange(product, qty + 1)}
-          className={cn(
-            'press-scale flex size-11 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40',
-            qty > 0
-              ? 'bg-primary text-bg'
-              : 'bg-surface-muted text-primary enabled:hover:bg-accent-soft',
-          )}
+    <div
+      className={cn(
+        'flex items-stretch gap-3 rounded-[16px] border bg-surface p-2.5 transition-colors duration-150 ease-out',
+        qty > 0 ? 'border-primary-soft' : 'border-line-soft',
+      )}
+    >
+      <div className="relative shrink-0 self-center">
+        <Link
+          to={`/produk/${product.id}`}
+          className="flex size-16 items-center justify-center overflow-hidden rounded-[12px] bg-surface-muted"
+          aria-label={`Lihat ${product.nama}`}
         >
-          <Plus className="size-[18px]" aria-hidden="true" />
-        </button>
+          {product.fotoUrl ? (
+            <img
+              src={product.fotoUrl}
+              alt=""
+              className="size-full object-cover outline outline-1 -outline-offset-1 outline-black/10"
+            />
+          ) : (
+            <Package className="size-6 text-primary-soft" aria-hidden="true" />
+          )}
+        </Link>
+        {qty > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border-2 border-surface bg-primary px-1 text-[11px] font-bold tabular-nums text-bg">
+            {qty}
+            <span className="sr-only"> di keranjang</span>
+          </span>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
+        <p className="line-clamp-2 text-sm font-semibold leading-snug text-primary">
+          {product.nama}
+        </p>
+        <div className="flex items-end justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-px">
+            <span className="text-[15px] font-bold tabular-nums text-primary">
+              {formatRupiah(product.hargaJual)}
+            </span>
+            <span
+              className={cn(
+                'truncate text-xs tabular-nums',
+                menipis ? 'text-warning' : 'text-muted',
+              )}
+            >
+              {product.stok === 0 ? 'Stok habis' : `Stok ${product.stok}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label={`Tambah ${product.nama}`}
+            disabled={habis}
+            onClick={() => onChange(product, qty + 1)}
+            className={cn(
+              'press-scale flex size-11 shrink-0 items-center justify-center rounded-full transition-colors duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-40',
+              qty > 0
+                ? 'bg-primary text-bg'
+                : 'bg-surface-muted text-primary enabled:hover:bg-muted-soft',
+            )}
+          >
+            <Plus className="size-[18px]" aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+const PAGE_SIZE = 12;
+
 /**
  * Layar POS. Mobile = alur 4 langkah (pen TO213 → p6iFM → NOO66/Iz4Nr → maq6j/lhvUF),
  * langkah disimpan di `?langkah=` agar tombol kembali peramban berfungsi.
- * md+: dua panel (produk | keranjang selalu tampil, canvas uGvXh / O7bvH).
+ * md+: dua panel — produk (paginasi bernomor) | panel checkout yang menjalankan langkah
+ * Keranjang → Konfirmasi → Selesai di tempat, memakai komponen langkah yang sama dengan mobile.
  */
 export function PosPage() {
-  const isMd = useMediaQuery('(min-width: 768px)');
+  const isMd = useMediaQuery(MQ.md);
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const langkahParam = searchParams.get('langkah') as Langkah | null;
   const langkah: Langkah =
     !isMd && langkahParam && LANGKAH.includes(langkahParam) ? langkahParam : 'pilih';
+  const [panelStep, setPanelStep] = useState<LangkahPanel>('keranjang');
 
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -169,7 +210,6 @@ export function PosPage() {
   const [lihatSemuaProduk, setLihatSemuaProduk] = useState(false);
   const [memuatSemua, setMemuatSemua] = useState(false);
   const [katAktif, setKatAktif] = useState('SEMUA');
-  const pageSize = 12;
   const create = useCreateTransaction();
 
   useEffect(() => {
@@ -194,6 +234,11 @@ export function PosPage() {
     if (butuhIsi || tanpaHasil) setSearchParams({}, { replace: true });
   }, [langkah, cart.size, hasil, setSearchParams]);
 
+  // Panel md+: konfirmasi tanpa isi kembali ke keranjang.
+  useEffect(() => {
+    if (panelStep === 'konfirmasi' && cart.size === 0) setPanelStep('keranjang');
+  }, [panelStep, cart.size]);
+
   function keLangkah(next: Langkah) {
     setSearchParams({ langkah: next }, { state: { posStep: true } });
   }
@@ -204,15 +249,23 @@ export function PosPage() {
       setSearchParams(langkah === 'konfirmasi' ? { langkah: 'keranjang' } : {}, { replace: true });
   }
 
-  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useProducts({
-      status: 'AKTIF',
-      limit: pageSize,
-      ...(debounced ? { search: debounced } : {}),
-      ...(katAktif !== 'SEMUA' ? { kategori: katAktif } : {}),
-    });
+  const filters = {
+    status: 'AKTIF' as const,
+    limit: PAGE_SIZE,
+    ...(debounced ? { search: debounced } : {}),
+    ...(katAktif !== 'SEMUA' ? { kategori: katAktif } : {}),
+  };
+
+  // Mobile: infinite "Muat produk lainnya". md+: satu halaman server per nomor halaman.
+  const infinite = useProducts(filters, { enabled: !isMd });
+  const paged = useProductsPage(filters, page, { enabled: isMd });
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = infinite;
+  const isLoading = isMd ? paged.isLoading : infinite.isLoading;
+  const isError = isMd ? paged.isError : infinite.isError;
+  const refetch = isMd ? paged.refetch : infinite.refetch;
   const allLoadedProducts = data?.pages.flatMap((p) => p.data) ?? [];
-  const totalProducts = data?.pages[0]?.pagination.total ?? 0;
+  const totalProducts =
+    (isMd ? paged.data?.pagination.total : data?.pages[0]?.pagination.total) ?? 0;
 
   async function goNextPage() {
     const loadedPages = data?.pages.length ?? 0;
@@ -242,6 +295,10 @@ export function PosPage() {
   }
 
   function setQty(product: Product, qty: number) {
+    // Panel md+: menambah produk setelah transaksi tersimpan memulai transaksi baru;
+    // mengubah isi saat konfirmasi kembali ke Keranjang supaya uang diterima diperiksa ulang.
+    if (isMd && panelStep === 'berhasil') resetPembayaran();
+    if (isMd && panelStep !== 'keranjang') setPanelStep('keranjang');
     setCart((prev) => {
       const next = new Map(prev);
       // Validasi stok di klien (backend tetap sumber kebenaran).
@@ -272,7 +329,8 @@ export function PosPage() {
         onSuccess: (t) => {
           setHasil(t);
           setCart(new Map());
-          setSearchParams({ langkah: 'berhasil' }, { replace: true });
+          if (isMd) setPanelStep('berhasil');
+          else setSearchParams({ langkah: 'berhasil' }, { replace: true });
         },
         onError: (err: unknown) =>
           setFormError(
@@ -282,28 +340,33 @@ export function PosPage() {
     );
   }
 
-  function transaksiBaru() {
+  function resetPembayaran() {
     setHasil(null);
     setUang('');
     setNamaPembeli('');
     setNoHp('');
     setNamaError(null);
     setFormError(null);
-    setSearchParams({}, { replace: true });
   }
 
-  const products = lihatSemuaProduk
-    ? allLoadedProducts
-    : (data?.pages[page - 1]?.data ?? data?.pages[0]?.data ?? []);
+  function transaksiBaru() {
+    resetPembayaran();
+    setPanelStep('keranjang');
+    if (!isMd) setSearchParams({}, { replace: true });
+  }
+
+  const products = isMd
+    ? (paged.data?.data ?? [])
+    : lihatSemuaProduk
+      ? allLoadedProducts
+      : (data?.pages[page - 1]?.data ?? data?.pages[0]?.data ?? []);
 
   // Daftar kategori dasar (produk aktif, tidak terpengaruh saat salah satu kategori dipilih).
   const { data: baseCategories = [] } = useProductCategories({ status: 'AKTIF' });
   const kategoriList = useMemo(() => {
-    const fromLoaded = daftarKategori(
-      (data?.pages.flatMap((p) => p.data) ?? []).map((p) => p.kategori),
-    );
-    return gabungKategori(baseCategories, fromLoaded);
-  }, [baseCategories, data?.pages]);
+    const termuat = isMd ? (paged.data?.data ?? []) : (data?.pages.flatMap((p) => p.data) ?? []);
+    return gabungKategori(baseCategories, daftarKategori(termuat.map((p) => p.kategori)));
+  }, [baseCategories, isMd, paged.data, data]);
 
   /* ── Langkah mobile setelah pilih produk ── */
   if (langkah === 'keranjang' && cart.size > 0) {
@@ -349,10 +412,10 @@ export function PosPage() {
   }
 
   return (
-    <div className={cn('flex flex-col', cartCount > 0 && 'pb-[74px] md:pb-0')}>
-      <div className="flex flex-1 flex-col gap-2.5 md:flex-row md:items-start md:gap-6 md:p-4">
+    <div className={cn('flex flex-col', !isMd && cartCount > 0 && 'pb-[74px]')}>
+      <div className="flex flex-1 flex-col gap-2.5 md:flex-row md:items-start md:gap-5 xl:gap-6">
         {/* Panel kiri: produk (pen Grup Pilih Produk gap 10) */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5 md:gap-3">
           <ScreenHeader
             eyebrow="TRANSAKSI"
             title="Transaksi Baru"
@@ -386,9 +449,15 @@ export function PosPage() {
           </div>
 
           {isLoading && (
-            <div className="flex flex-col gap-2" aria-busy="true">
+            <div
+              className="flex flex-col gap-2 md:grid md:grid-cols-1 md:gap-3 lg:grid-cols-2"
+              aria-busy="true"
+            >
               {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="h-14 animate-pulse rounded-[14px] bg-surface" />
+                <div
+                  key={i}
+                  className="h-14 animate-pulse rounded-[14px] bg-surface md:h-[88px] md:rounded-[16px]"
+                />
               ))}
             </div>
           )}
@@ -432,16 +501,33 @@ export function PosPage() {
                 <span className="text-xs text-muted">{totalProducts} produk</span>
               </div>
               {isMd ? (
-                <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-3">
-                  {products.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      qty={cart.get(p.id)?.qty ?? 0}
-                      onChange={setQty}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div
+                    className={cn(
+                      'grid grid-cols-1 gap-3 transition-opacity duration-150 ease-out lg:grid-cols-2',
+                      paged.isPlaceholderData && 'opacity-60',
+                    )}
+                  >
+                    {products.map((p) => (
+                      <ProductTile
+                        key={p.id}
+                        product={p}
+                        qty={cart.get(p.id)?.qty ?? 0}
+                        onChange={setQty}
+                      />
+                    ))}
+                  </div>
+                  <Pagination
+                    className="pt-1"
+                    page={page}
+                    totalPages={paged.data?.pagination.totalPages ?? 1}
+                    total={totalProducts}
+                    pageSize={PAGE_SIZE}
+                    onPage={setPage}
+                    itemLabel="produk"
+                    busy={paged.isPlaceholderData}
+                  />
+                </>
               ) : (
                 <div className="flex flex-col gap-2">
                   {products.map((p) => (
@@ -454,7 +540,7 @@ export function PosPage() {
                   ))}
                 </div>
               )}
-              {!lihatSemuaProduk && (hasNextPage || page < (data?.pages.length ?? 0)) && (
+              {!isMd && !lihatSemuaProduk && (hasNextPage || page < (data?.pages.length ?? 0)) && (
                 <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                   <Button
                     variant="secondary"
@@ -474,7 +560,7 @@ export function PosPage() {
                   </Button>
                 </div>
               )}
-              {page > 1 && !lihatSemuaProduk && (
+              {!isMd && page > 1 && !lihatSemuaProduk && (
                 <Button
                   variant="secondary"
                   className="mx-auto h-11 px-4 text-xs"
@@ -483,7 +569,7 @@ export function PosPage() {
                   Halaman sebelumnya
                 </Button>
               )}
-              {lihatSemuaProduk && (
+              {!isMd && lihatSemuaProduk && (
                 <div className="flex flex-col items-center gap-2 pt-1">
                   {memuatSemua && (
                     <p role="status" className="text-xs text-muted">
@@ -503,27 +589,55 @@ export function PosPage() {
           )}
         </div>
 
-        {/* Panel kanan: keranjang selalu tampil (md+) */}
-        <aside className="hidden w-[350px] shrink-0 flex-col gap-3 rounded-card border border-line-soft bg-surface p-4 md:flex xl:w-[400px]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-primary">Keranjang</h2>
-            <span className="text-sm font-semibold text-primary-soft">
-              {ringkasItem(cartItems)}
-            </span>
-          </div>
-          <div className="h-px bg-line-soft" />
-          <CartForm
-            cart={cartItems}
-            onQty={setQty}
-            onSelesai={() => {}}
-            onReset={() => setCart(new Map())}
-            compact
-          />
-        </aside>
+        {/* Panel kanan md+: checkout di tempat, menempel setinggi layar (isi bergulir sendiri). */}
+        {isMd && (
+          <aside
+            aria-label="Panel checkout"
+            className="sticky top-6 flex h-[calc(100dvh-48px)] w-[320px] shrink-0 flex-col overflow-hidden rounded-[20px] border border-line-soft bg-surface lg:w-[360px] xl:w-[400px]"
+          >
+            {panelStep === 'berhasil' && hasil ? (
+              <BerhasilStep
+                layout="panel"
+                transaksi={hasil}
+                onTransaksiBaru={transaksiBaru}
+                onBeranda={() => navigate('/')}
+                onLihatDetail={() => navigate(`/riwayat?trx=${hasil.id}`)}
+              />
+            ) : panelStep === 'konfirmasi' && cart.size > 0 ? (
+              <KonfirmasiStep
+                layout="panel"
+                cart={cartItems}
+                uang={uang}
+                namaPembeli={namaPembeli}
+                noHp={noHp}
+                onNama={(v) => {
+                  setNamaPembeli(v);
+                  if (namaError && v.trim()) setNamaError(null);
+                }}
+                onNoHp={setNoHp}
+                namaError={namaError}
+                formError={formError}
+                busy={create.isPending}
+                onBack={() => setPanelStep('keranjang')}
+                onSimpan={simpanTransaksi}
+              />
+            ) : (
+              <KeranjangStep
+                layout="panel"
+                cart={cartItems}
+                uang={uang}
+                onUang={setUang}
+                onQty={setQty}
+                onClear={() => setCart(new Map())}
+                onLanjut={() => setPanelStep('konfirmasi')}
+              />
+            )}
+          </aside>
+        )}
       </div>
 
       {/* Bar Keranjang (pen G49pEA): surface + garis atas line-soft, p[12,20,14,20], di atas bottom nav */}
-      {cartCount > 0 && (
+      {!isMd && cartCount > 0 && (
         <div className="fixed inset-x-0 bottom-[calc(63px+max(25px,env(safe-area-inset-bottom)))] z-30 border-t border-line-soft bg-surface px-5 pb-3.5 pt-3 md:hidden">
           <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-2.5">
             <div className="flex min-w-0 flex-col gap-px">

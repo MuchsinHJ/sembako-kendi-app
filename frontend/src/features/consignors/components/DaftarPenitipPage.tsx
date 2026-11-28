@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserRoundPlus, Users } from 'lucide-react';
-import { useConsignors, useConsignorBalance } from '../api';
+import { useConsignors, useConsignorBalance, useConsignorsPage } from '../api';
+import { useDashboardSummary } from '@/features/dashboard/api';
+import { Pagination } from '@/components/Pagination';
+import { MQ } from '@/lib/breakpoints';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 import { useProducts } from '@/features/products/api';
 import { ConsignorFormModal } from './ConsignorFormModal';
 import { Button } from '@/components/Button';
@@ -40,6 +44,7 @@ function ConsignorCard({
   status,
   activeProductCount,
   onClick,
+  wide = false,
 }: {
   id: string;
   nama: string;
@@ -47,9 +52,75 @@ function ConsignorCard({
   status: ConsignorStatus;
   activeProductCount: number;
   onClick: () => void;
+  /** md+: kartu grid dengan inisial + label saldo. */
+  wide?: boolean;
 }) {
   const { data: balance } = useConsignorBalance(id);
   const saldo = Number(balance?.saldo ?? '0');
+  const nonaktif = status === 'NONAKTIF';
+
+  if (wide) {
+    const inisial = nama
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join('');
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="press-scale flex flex-col gap-3 rounded-[18px] border border-line-soft bg-surface p-4 text-left transition-colors duration-150 ease-out hover:bg-surface-muted"
+      >
+        <div className="flex w-full items-center gap-3">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex size-11 shrink-0 items-center justify-center rounded-full text-[13px] font-bold',
+              nonaktif ? 'bg-muted-soft text-muted' : 'bg-accent-soft text-primary',
+            )}
+          >
+            {inisial || '?'}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span
+              className={cn(
+                'truncate text-[15px] font-semibold',
+                nonaktif ? 'text-muted' : 'text-primary',
+              )}
+            >
+              {nama}
+            </span>
+            <span className="truncate text-xs text-muted">{noHp ?? 'Tanpa no. HP'}</span>
+          </span>
+          <Badge
+            variant={nonaktif ? 'netral' : 'lunas'}
+            label={nonaktif ? 'Nonaktif' : 'Aktif'}
+            dot={false}
+          />
+        </div>
+        <div className="flex w-full items-end justify-between gap-2 rounded-[12px] bg-surface-muted px-3 py-2.5">
+          <span className="flex flex-col gap-px">
+            <span className="text-xs text-muted">Produk titipan aktif</span>
+            <span className="text-[15px] font-bold tabular-nums text-primary">
+              {activeProductCount}
+            </span>
+          </span>
+          <span className="flex flex-col items-end gap-px">
+            <span className="text-xs text-muted">Saldo kewajiban</span>
+            <span
+              className={cn(
+                'text-[15px] font-bold tabular-nums',
+                saldo < 0 ? 'text-danger' : saldo === 0 ? 'text-muted' : 'text-primary',
+              )}
+            >
+              {balance ? formatRupiah(balance.saldo) : '…'}
+            </span>
+          </span>
+        </div>
+      </button>
+    );
+  }
 
   return (
     <button
@@ -87,6 +158,8 @@ function ConsignorCard({
   );
 }
 
+const PAGE_SIZE = 12;
+
 /** Layar Daftar Penitip (pen q0uRhl). Tambahan: tombol tambah penitip di header (ikon pada mobile). */
 export function DaftarPenitipPage() {
   const navigate = useNavigate();
@@ -100,11 +173,22 @@ export function DaftarPenitipPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  const isMd = useMediaQuery(MQ.md);
+  const [page, setPage] = useState(1);
   const filters = { ...filterToParams(filter), ...(debounced ? { search: debounced } : {}) };
-  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useConsignors(filters);
-  const consignors = data?.pages.flatMap((p) => p.data) ?? [];
-  const totalPenitip = data?.pages[0]?.pagination.total ?? consignors.length;
+  useEffect(() => setPage(1), [filter, debounced]);
+  // Mobile: infinite "Muat lebih banyak"; md+: grid + paginasi bernomor (prefetch halaman berikutnya).
+  const infinite = useConsignors(filters, { enabled: !isMd });
+  const paged = useConsignorsPage(filters, page, PAGE_SIZE, { enabled: isMd });
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = infinite;
+  const isLoading = isMd ? paged.isLoading : infinite.isLoading;
+  const isError = isMd ? paged.isError : infinite.isError;
+  const refetch = isMd ? paged.refetch : infinite.refetch;
+  const consignors = isMd ? (paged.data?.data ?? []) : (data?.pages.flatMap((p) => p.data) ?? []);
+  const totalPenitip =
+    (isMd ? paged.data?.pagination.total : data?.pages[0]?.pagination.total) ?? consignors.length;
+  const loaded = isMd ? !!paged.data : !!data;
+  const summary = useDashboardSummary();
 
   // Produk titipan aktif → jumlah per penitip.
   const { data: titipanData } = useProducts({ tipe: 'TITIPAN', status: 'AKTIF', limit: 100 });
@@ -119,7 +203,7 @@ export function DaftarPenitipPage() {
     return counts;
   }, [titipanProducts]);
 
-  const subtitle = data
+  const subtitle = loaded
     ? `${totalPenitip} penitip · ${titipanProducts.length} produk titipan aktif`
     : undefined;
   const mencari = !!debounced || filter !== 'SEMUA';
@@ -152,28 +236,61 @@ export function DaftarPenitipPage() {
         }
       />
 
-      <SearchField
-        value={search}
-        onChange={setSearch}
-        placeholder="Cari nama penitip"
-        label="Cari penitip"
-      />
-      {/* Filter Penitip (pen): chip h38 */}
-      <div role="group" aria-label="Filter penitip" className="flex flex-wrap gap-2">
-        {FILTER_OPTIONS.map((o) => (
-          <ChipFilter
-            key={o.value}
-            active={filter === o.value}
-            onClick={() => setFilter(o.value)}
-            className="h-[38px]"
-          >
-            {o.label}
-          </ChipFilter>
-        ))}
+      {/* md+: ringkasan sebaris (kewajiban dari dashboard, jumlah dari server). */}
+      {isMd && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="flex min-w-0 flex-col gap-0.5 rounded-[16px] bg-primary px-4 py-3">
+            <span className="text-xs font-medium text-accent-soft">Total kewajiban penitip</span>
+            <span className="truncate text-[22px] font-bold leading-tight tabular-nums text-bg">
+              {summary.data ? formatRupiah(summary.data.totalKewajibanPenitip) : '–'}
+            </span>
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5 rounded-[16px] border border-line-soft bg-surface px-4 py-3">
+            <span className="text-xs font-medium text-muted">
+              {mencari ? 'Penitip ditemukan' : 'Jumlah penitip'}
+            </span>
+            <span className="text-[22px] font-bold leading-tight tabular-nums text-primary">
+              {loaded ? totalPenitip : '–'}
+            </span>
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5 rounded-[16px] border border-line-soft bg-surface px-4 py-3">
+            <span className="text-xs font-medium text-muted">Produk titipan aktif</span>
+            <span className="text-[22px] font-bold leading-tight tabular-nums text-primary">
+              {titipanData ? titipanProducts.length : '–'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="md:min-w-0 md:flex-1">
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Cari nama penitip"
+            label="Cari penitip"
+          />
+        </div>
+        {/* Filter Penitip (pen): chip h38; md+ 44 (target sentuh tablet) */}
+        <div role="group" aria-label="Filter penitip" className="flex flex-wrap gap-2">
+          {FILTER_OPTIONS.map((o) => (
+            <ChipFilter
+              key={o.value}
+              active={filter === o.value}
+              onClick={() => setFilter(o.value)}
+              className="h-[38px] md:h-11"
+            >
+              {o.label}
+            </ChipFilter>
+          ))}
+        </div>
       </div>
 
       {isLoading && (
-        <div className="flex flex-col gap-2.5" aria-busy="true">
+        <div
+          className="flex flex-col gap-2.5 md:grid md:grid-cols-2 xl:grid-cols-3"
+          aria-busy="true"
+        >
           {Array.from({ length: 3 }, (_, i) => (
             <div
               key={i}
@@ -221,7 +338,13 @@ export function DaftarPenitipPage() {
       )}
 
       {consignors.length > 0 && (
-        <div className="flex flex-col gap-2.5">
+        <div
+          className={cn(
+            'flex flex-col gap-2.5 md:grid md:grid-cols-2 md:gap-3 xl:grid-cols-3',
+            isMd && 'transition-opacity duration-150 ease-out',
+            paged.isPlaceholderData && 'opacity-60',
+          )}
+        >
           {consignors.map((c) => (
             <ConsignorCard
               key={c.id}
@@ -231,12 +354,25 @@ export function DaftarPenitipPage() {
               status={c.status}
               activeProductCount={titipanCountByConsignor[c.id] ?? 0}
               onClick={() => navigate(`/penitip/${c.id}`)}
+              wide={isMd}
             />
           ))}
         </div>
       )}
 
-      {hasNextPage && (
+      {isMd && !isLoading && !isError && consignors.length > 0 && (
+        <Pagination
+          page={page}
+          totalPages={paged.data?.pagination.totalPages ?? 1}
+          total={totalPenitip}
+          pageSize={PAGE_SIZE}
+          onPage={setPage}
+          itemLabel="penitip"
+          busy={paged.isPlaceholderData}
+        />
+      )}
+
+      {!isMd && hasNextPage && (
         <Button
           variant="secondary"
           onClick={() => fetchNextPage()}

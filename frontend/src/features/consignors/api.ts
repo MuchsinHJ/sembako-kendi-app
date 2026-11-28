@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/http';
+import { usePagedQuery } from '@/lib/usePagedQuery';
 import type {
   Consignor,
   ConsignorBalance,
@@ -14,7 +15,7 @@ import type {
 // ─── GET /consignors ──────────────────────────────────────────────────────────
 
 export function listConsignorsApi(
-  params: ConsignorFilters & { page: number; limit?: number }
+  params: ConsignorFilters & { page: number; limit?: number },
 ): Promise<PagedResult<Consignor>> {
   const q = new URLSearchParams();
   if (params.status) q.set('status', params.status);
@@ -26,13 +27,29 @@ export function listConsignorsApi(
 }
 
 /** Query key konvensi §5.5: `['consignors', filters]`. */
-export function useConsignors(filters: ConsignorFilters) {
+export function useConsignors(filters: ConsignorFilters, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: ['consignors', filters],
     initialPageParam: 1,
     queryFn: ({ pageParam }) => listConsignorsApi({ ...filters, page: pageParam }),
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** Satu halaman penitip (md+, grid + paginasi bernomor). */
+export function useConsignorsPage(
+  filters: ConsignorFilters,
+  page: number,
+  limit: number,
+  options?: { enabled?: boolean },
+) {
+  return usePagedQuery({
+    queryKey: ['consignors', 'paged', filters, limit],
+    page,
+    fetchPage: (p) => listConsignorsApi({ ...filters, page: p, limit }),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -68,7 +85,7 @@ export function useConsignorBalance(id: string) {
 
 export function listConsignorPaymentsApi(
   id: string,
-  params: { page: number; limit?: number }
+  params: { page: number; limit?: number },
 ): Promise<PagedResult<ConsignorPayment>> {
   const q = new URLSearchParams();
   q.set('page', String(params.page));
@@ -88,6 +105,16 @@ export function useConsignorPayments(id: string) {
   });
 }
 
+/** Satu halaman riwayat setoran (panel md+, paginasi bernomor). */
+export function useConsignorPaymentsPage(id: string, page: number, limit = 8) {
+  return usePagedQuery({
+    queryKey: ['consignors', id, 'payments', 'paged', limit],
+    page,
+    fetchPage: (p) => listConsignorPaymentsApi(id, { page: p, limit }),
+    enabled: !!id,
+  });
+}
+
 // ─── POST /consignors ─────────────────────────────────────────────────────────
 
 export interface CreateConsignorPayload {
@@ -102,8 +129,14 @@ export function createConsignorApi(input: CreateConsignorPayload): Promise<Consi
   return apiFetch<ConsignorDetail>('/consignors', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function updateConsignorApi(id: string, input: UpdateConsignorPayload): Promise<ConsignorDetail> {
-  return apiFetch<ConsignorDetail>(`/consignors/${id}`, { method: 'PUT', body: JSON.stringify(input) });
+export function updateConsignorApi(
+  id: string,
+  input: UpdateConsignorPayload,
+): Promise<ConsignorDetail> {
+  return apiFetch<ConsignorDetail>(`/consignors/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
 }
 
 export function useCreateConsignor() {
@@ -130,7 +163,10 @@ export function useUpdateConsignor(id: string) {
 
 // ─── PATCH /consignors/:id/status (BR-E) ──────────────────────────────────────
 
-export function updateConsignorStatusApi(id: string, status: 'AKTIF' | 'NONAKTIF'): Promise<ConsignorDetail> {
+export function updateConsignorStatusApi(
+  id: string,
+  status: 'AKTIF' | 'NONAKTIF',
+): Promise<ConsignorDetail> {
   return apiFetch<ConsignorDetail>(`/consignors/${id}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
@@ -157,7 +193,7 @@ export interface CreateConsignorPaymentPayload {
 
 export function createConsignorPaymentApi(
   id: string,
-  input: CreateConsignorPaymentPayload
+  input: CreateConsignorPaymentPayload,
 ): Promise<ConsignorPayment> {
   return apiFetch<ConsignorPayment>(`/consignors/${id}/payments`, {
     method: 'POST',
@@ -186,7 +222,10 @@ export interface MovementPayload {
   catatan?: string | null;
 }
 
-export function createMovementApi(tipe: MovementTipe, input: MovementPayload): Promise<ConsignmentMovement> {
+export function createMovementApi(
+  tipe: MovementTipe,
+  input: MovementPayload,
+): Promise<ConsignmentMovement> {
   const path = tipe === 'TERIMA' ? '/consignment/receipts' : '/consignment/returns';
   return apiFetch<ConsignmentMovement>(path, { method: 'POST', body: JSON.stringify(input) });
 }
@@ -213,7 +252,7 @@ export interface MovementFilters {
 }
 
 export function listMovementsApi(
-  params: MovementFilters & { page: number; limit?: number }
+  params: MovementFilters & { page: number; limit?: number },
 ): Promise<PagedResult<ConsignmentMovement>> {
   const q = new URLSearchParams();
   if (params.consignorId) q.set('consignorId', params.consignorId);
@@ -222,6 +261,16 @@ export function listMovementsApi(
   q.set('page', String(params.page));
   q.set('limit', String(params.limit ?? 20));
   return apiFetch<PagedResult<ConsignmentMovement>>(`/consignment/movements?${q.toString()}`);
+}
+
+/** Satu halaman pergerakan titipan (panel riwayat md+, paginasi bernomor). */
+export function useMovementsPage(filters: MovementFilters, page: number, limit = 8) {
+  return usePagedQuery({
+    queryKey: ['consignment', 'movements', 'paged', filters, limit],
+    page,
+    fetchPage: (p) => listMovementsApi({ ...filters, page: p, limit }),
+    enabled: !!(filters.consignorId || filters.productId),
+  });
 }
 
 export function useMovements(filters: MovementFilters) {

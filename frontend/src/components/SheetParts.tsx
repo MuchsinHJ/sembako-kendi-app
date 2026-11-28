@@ -67,7 +67,7 @@ export function AmountField({
   const tampil = value === '' ? '' : Number(value).toLocaleString('id-ID');
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={inputId} className="text-[10.5px] font-semibold text-muted">
+      <label htmlFor={inputId} className="text-[10.5px] font-semibold text-muted md:text-xs">
         {label}
       </label>
       <div
@@ -115,7 +115,7 @@ export function SoftTextField({
   const inputId = id ?? fallbackId;
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <label htmlFor={inputId} className="text-[10.5px] font-semibold text-muted">
+      <label htmlFor={inputId} className="text-[10.5px] font-semibold text-muted md:text-xs">
         {label}
       </label>
       <input

@@ -1,9 +1,9 @@
 /* eslint-disable testing-library/prefer-screen-queries -- query dibatasi scope dialog via within() */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { renderWithProviders } from '../../test/helpers';
+import { mockViewport, renderWithProviders } from '../../test/helpers';
 import { DaftarPenitipPage } from './components/DaftarPenitipPage';
 import { DetailPenitipPage } from './components/DetailPenitipPage';
 
@@ -178,5 +178,31 @@ describe('Detail Penitip (c1: saldo negatif)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('Penitip md+', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = mockViewport(1280);
+  });
+  afterEach(() => restore());
+
+  it('daftar: ringkasan sebaris + kartu grid', async () => {
+    renderAt('/penitip', '/penitip', <DaftarPenitipPage />);
+    expect(await screen.findByText('Bu Rina')).toBeInTheDocument();
+    expect(screen.getByText('Total kewajiban penitip')).toBeInTheDocument();
+    expect(screen.getAllByText('Saldo kewajiban').length).toBeGreaterThan(0);
+  });
+
+  it('detail: panel bertab produk · setoran · pergerakan', async () => {
+    renderAt('/penitip/:id', '/penitip/c1', <DetailPenitipPage />);
+    expect(await screen.findByRole('region', { name: 'Produk titipan' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Riwayat setoran' }));
+    expect(await screen.findByRole('region', { name: 'Riwayat setoran' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Pergerakan' }));
+    expect(
+      await screen.findByText('Belum ada penerimaan atau retur titipan.'),
+    ).toBeInTheDocument();
   });
 });

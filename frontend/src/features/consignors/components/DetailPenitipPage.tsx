@@ -34,6 +34,9 @@ import { formatRupiah } from '@/lib/money';
 import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/http';
 import type { ConsignorPayment } from '../types';
+import { MQ } from '@/lib/breakpoints';
+import { useMediaQuery } from '@/lib/useMediaQuery';
+import { PenitipTabs } from './PenitipTabs';
 
 function formatTanggalPanjangSaja(iso: string): string {
   return new Intl.DateTimeFormat('id-ID', {
@@ -391,6 +394,7 @@ function RincianRow({ label, value }: { label: string; value: ReactNode }) {
 export function DetailPenitipPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const isMd = useMediaQuery(MQ.md);
 
   const { data: consignor, isLoading, isError, refetch } = useConsignor(id);
   const { data: balance } = useConsignorBalance(id);
@@ -453,8 +457,8 @@ export function DetailPenitipPage() {
         }
       />
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-[18px]">
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-[300px_minmax(0,1fr)] md:items-start md:gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 md:sticky md:top-6">
           {/* Kartu Saldo Penitip (pen): primary r18 p16 gap3 — negatif: warning-soft + nilai danger */}
           <div
             className={cn(
@@ -528,7 +532,8 @@ export function DetailPenitipPage() {
           )}
 
           {/* Blok Riwayat Setoran (pen): gap 8 — mobile & tablet; lg+ di kolom kanan */}
-          <section aria-label="Riwayat setoran" className="flex flex-col gap-2 lg:hidden">
+          {!isMd && (
+          <section aria-label="Riwayat setoran" className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <h2 className="text-[13px] font-semibold text-primary">Riwayat setoran</h2>
               <span className="text-[11px] text-muted">hanya bisa ditambah</span>
@@ -551,15 +556,18 @@ export function DetailPenitipPage() {
               </button>
             )}
           </section>
+          )}
 
+          {!isMd && (
           <Button
             variant="secondary"
-            className="h-[46px] w-full text-[13px] lg:hidden"
+            className="h-[46px] w-full text-[13px]"
             onClick={() => setProdukOpen(true)}
           >
             <Package className="size-4" aria-hidden="true" />
             Lihat produk titipan ({jumlahProduk})
           </Button>
+          )}
 
           {nonaktif ? (
             <Button
@@ -591,19 +599,8 @@ export function DetailPenitipPage() {
           )}
         </div>
 
-        {/* Kanan lg+: riwayat setoran & produk titipan */}
-        <div className="hidden min-w-0 flex-1 lg:block">
-          <div className="sticky top-6 flex flex-col gap-3">
-            <Card variant="list" className="flex flex-col gap-3 p-4">
-              <h2 className="text-base font-bold text-primary">Riwayat Setoran</h2>
-              <RiwayatSetoranContent consignorId={id} />
-            </Card>
-            <Card variant="list" className="flex flex-col gap-3 p-4">
-              <h2 className="text-base font-bold text-primary">Produk Titipan</h2>
-              <ProdukTitipanContent consignorId={id} />
-            </Card>
-          </div>
-        </div>
+        {/* Kanan md+: panel bertab (produk · setoran · pergerakan), berpaginasi. */}
+        {isMd && <PenitipTabs consignorId={id} />}
       </div>
 
       <ConsignorFormModal

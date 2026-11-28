@@ -29,11 +29,11 @@ export function AppShell() {
       <SidebarNav variant="desktop" />
       <main
         className={cn(
-          'md:ml-24 md:pb-8 lg:ml-[248px]',
+          'md:ml-24 md:pb-8 xl:ml-[248px]',
           navless ? 'pb-8' : 'pb-[calc(108px+env(safe-area-inset-bottom))]',
         )}
       >
-        <div className="mx-auto w-full max-w-6xl px-5 pt-5 md:px-6 md:pt-6 lg:px-9">
+        <div className="mx-auto w-full max-w-6xl px-5 pt-5 md:px-6 md:pt-6 xl:px-9">
           <Outlet />
         </div>
       </main>

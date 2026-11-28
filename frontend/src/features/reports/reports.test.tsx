@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { renderWithProviders } from '../../test/helpers';
+import { mockViewport, renderWithProviders } from '../../test/helpers';
 import { server, setReportFixtures } from '../../test/msw/server';
 import { LaporanPenjualanPage } from './components/LaporanPenjualanPage';
 import { LaporanKonsinyasiPage } from './components/LaporanKonsinyasiPage';
@@ -181,5 +181,34 @@ describe('Laporan Konsinyasi', () => {
     expect(screen.queryByRole('button', { name: /excel/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /pdf/i })).not.toBeInTheDocument();
     expect(screen.getAllByText(/all-time/i).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('Laporan md+', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = mockViewport(1280);
+  });
+  afterEach(() => restore());
+
+  it('penjualan: tab laporan, kartu metrik, tabel transaksi', async () => {
+    renderAt('/laporan/penjualan', '/laporan/penjualan', <LaporanPenjualanPage />);
+    expect(await screen.findByText('Margin profit')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Jenis laporan' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Penjualan' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('columnheader', { name: 'Pembeli' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pak Budi' })).toBeInTheDocument();
+    expect(screen.getByText('Beras 5kg')).toBeInTheDocument();
+  });
+
+  it('konsinyasi & utang memakai tabel per baris', async () => {
+    renderAt('/laporan/konsinyasi', '/laporan/konsinyasi', <LaporanKonsinyasiPage />);
+    expect(await screen.findByRole('columnheader', { name: 'Saldo akhir' })).toBeInTheDocument();
+  });
+
+  it('utang: ringkasan + tombol ekspor di header', async () => {
+    renderAt('/laporan/utang', '/laporan/utang', <LaporanUtangPage />);
+    expect(await screen.findByText('Cicilan diterima')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ekspor' })).toBeEnabled();
   });
 });

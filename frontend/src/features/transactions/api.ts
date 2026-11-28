@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/http';
+import { usePagedQuery } from '@/lib/usePagedQuery';
 import type { PagedResult, Payment, Transaction, TransactionFilters } from './types';
 
 export interface CreateTransactionPayload {
@@ -12,7 +13,7 @@ export interface CreateTransactionPayload {
 // ─── GET /transactions ────────────────────────────────────────────────────────
 
 export function listTransactionsApi(
-  params: TransactionFilters & { page: number; limit?: number }
+  params: TransactionFilters & { page: number; limit?: number },
 ): Promise<PagedResult<Transaction>> {
   const q = new URLSearchParams();
   if (params.startDate) q.set('startDate', params.startDate);
@@ -25,13 +26,28 @@ export function listTransactionsApi(
 }
 
 /** Query key konvensi §5.5: `['transactions', filters]`. */
-export function useTransactions(filters: TransactionFilters) {
+export function useTransactions(filters: TransactionFilters, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: ['transactions', filters],
     initialPageParam: 1,
     queryFn: ({ pageParam }) => listTransactionsApi({ ...filters, page: pageParam }),
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** Satu halaman transaksi (md+, paginasi bernomor + prefetch halaman berikutnya). */
+export function useTransactionsPage(
+  filters: TransactionFilters,
+  page: number,
+  options?: { enabled?: boolean },
+) {
+  return usePagedQuery({
+    queryKey: ['transactions', 'paged', filters],
+    page,
+    fetchPage: (p) => listTransactionsApi({ ...filters, page: p }),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -42,7 +58,11 @@ export function getTransactionApi(id: string): Promise<Transaction> {
 }
 
 export function useTransaction(id: string) {
-  return useQuery({ queryKey: ['transactions', id], queryFn: () => getTransactionApi(id), enabled: !!id });
+  return useQuery({
+    queryKey: ['transactions', id],
+    queryFn: () => getTransactionApi(id),
+    enabled: !!id,
+  });
 }
 
 // ─── POST /transactions ───────────────────────────────────────────────────────
@@ -90,20 +110,34 @@ export function useVoidTransaction(id: string) {
 
 // ─── GET /debts ───────────────────────────────────────────────────────────────
 
-export function listDebtsApi(params: { page: number; limit?: number }): Promise<PagedResult<Transaction>> {
+export function listDebtsApi(params: {
+  page: number;
+  limit?: number;
+}): Promise<PagedResult<Transaction>> {
   const q = new URLSearchParams();
   q.set('page', String(params.page));
   q.set('limit', String(params.limit ?? 20));
   return apiFetch<PagedResult<Transaction>>(`/debts?${q.toString()}`);
 }
 
-export function useDebts() {
+export function useDebts(options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: ['debts'],
     initialPageParam: 1,
     queryFn: ({ pageParam }) => listDebtsApi({ page: pageParam }),
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** Satu halaman utang aktif (md+). */
+export function useDebtsPage(page: number, limit: number, options?: { enabled?: boolean }) {
+  return usePagedQuery({
+    queryKey: ['debts', 'paged', limit],
+    page,
+    fetchPage: (p) => listDebtsApi({ page: p, limit }),
+    enabled: options?.enabled ?? true,
   });
 }
 

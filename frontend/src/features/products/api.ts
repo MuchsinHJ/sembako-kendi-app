@@ -1,10 +1,6 @@
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/http';
+import { usePagedQuery } from '@/lib/usePagedQuery';
 import { daftarKategori, type OpsiKategori } from './kategori';
 import type {
   ConsignorOption,
@@ -20,7 +16,7 @@ import type {
 // ─── GET /products ────────────────────────────────────────────────────────────
 
 export function listProductsApi(
-  params: ProductFilters & { page: number; limit?: number }
+  params: ProductFilters & { page: number; limit?: number },
 ): Promise<ProductListResult> {
   const q = new URLSearchParams();
   if (params.search) q.set('search', params.search);
@@ -35,13 +31,28 @@ export function listProductsApi(
 }
 
 /** Query key konvensi §5.5: `['products', filters]` (filter deterministik). */
-export function useProducts(filters: ProductFilters) {
+export function useProducts(filters: ProductFilters, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: ['products', filters],
     initialPageParam: 1,
     queryFn: ({ pageParam }) => listProductsApi({ ...filters, page: pageParam }),
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** Satu halaman produk (layout md+ dengan paginasi bernomor; halaman berikutnya di-prefetch). */
+export function useProductsPage(
+  filters: ProductFilters,
+  page: number,
+  options?: { enabled?: boolean },
+) {
+  return usePagedQuery({
+    queryKey: ['products', 'paged', filters],
+    page,
+    fetchPage: (p) => listProductsApi({ ...filters, page: p }),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -163,7 +174,10 @@ export function useUpdateStockThreshold(id: string) {
 
 // ─── PATCH /products/:id/stock-adjustment ─────────────────────────────────────
 
-export function adjustStockApi(id: string, input: { delta: number; alasan: string }): Promise<Product> {
+export function adjustStockApi(
+  id: string,
+  input: { delta: number; alasan: string },
+): Promise<Product> {
   return apiFetch<Product>(`/products/${id}/stock-adjustment`, {
     method: 'PATCH',
     body: JSON.stringify(input),
@@ -184,7 +198,10 @@ export function useAdjustStock(id: string) {
 
 // ─── Foto: POST / DELETE /products/:id/photo ──────────────────────────────────
 
-export function uploadPhotoApi(id: string, file: File): Promise<{ fotoUrl: string; fotoKey: string }> {
+export function uploadPhotoApi(
+  id: string,
+  file: File,
+): Promise<{ fotoUrl: string; fotoKey: string }> {
   const form = new FormData();
   form.append('photo', file);
   return apiFetch<{ fotoUrl: string; fotoKey: string }>(`/products/${id}/photo`, {
@@ -201,7 +218,7 @@ export function deletePhotoApi(id: string): Promise<{ message: string }> {
 
 export function listActiveConsignorsApi(): Promise<ConsignorOption[]> {
   return apiFetch<{ data: ConsignorOption[] }>('/consignors?status=AKTIF&limit=100').then(
-    (r) => r.data
+    (r) => r.data,
   );
 }
 

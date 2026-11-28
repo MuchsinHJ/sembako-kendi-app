@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CircleAlert, Eye, EyeOff, Store } from 'lucide-react';
+import { ChartColumn, CircleAlert, Eye, EyeOff, Package, ReceiptText, Store } from 'lucide-react';
 import { useLogin } from './api';
 import { loginSchema, type LoginInput } from './schemas';
 import { LOGIN_FAIL_MESSAGE } from './api';
@@ -59,25 +59,47 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-dvh bg-bg">
-      {/* Panel kiri brand (06 §5.10) — md+ */}
-      <div className="hidden flex-1 items-center justify-center bg-primary px-10 md:flex">
-        <div className="max-w-sm">
-          <span className="block text-xs font-semibold tracking-[1.2px] text-accent-soft">
-            KENDI&apos;S MARKET
-          </span>
-          <h1 className="mt-3 text-3xl font-bold leading-tight text-bg">
-            Kelola toko sembako Anda dalam satu genggaman.
-          </h1>
-          <p className="mt-3 text-sm text-bg/70">
-            Produk, stok, transaksi tunai &amp; utang, hingga konsinyasi — tercatat rapi dan
-            terpusat.
-          </p>
+      {/* Panel brand md+ (canvas MxAEU / X7CLen, dirapikan): panel primary inset r28, poin fitur. */}
+      <div className="hidden p-4 md:flex md:w-[44%] lg:w-1/2">
+        <div className="flex w-full flex-col justify-between rounded-[28px] bg-primary p-8 lg:p-12">
+          <div className="flex items-center gap-3">
+            <span className="flex size-12 items-center justify-center rounded-[16px] bg-primary-soft">
+              <Store className="size-[22px] text-bg" aria-hidden="true" />
+            </span>
+            <span className="text-[13px] font-semibold tracking-[1.4px] text-accent-soft">KENDI&apos;S MARKET</span>
+          </div>
+          <div className="flex max-w-md flex-col gap-4">
+            <h2 className="text-[30px] font-bold leading-tight text-bg lg:text-[36px]">
+              Kelola toko sembako dalam satu tempat.
+            </h2>
+            <p className="text-[14px] leading-relaxed text-accent-soft">
+              Catat penjualan tunai dan utang, pantau stok, dan rekap titipan penitip tanpa buku catatan.
+            </p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {(
+              [
+                [ReceiptText, 'Transaksi lunas & utang', 'Status dihitung otomatis dari uang diterima'],
+                [Package, 'Stok & barang titipan', 'Peringatan saat stok menipis'],
+                [ChartColumn, 'Laporan per periode', 'Omzet, profit, dan ekspor Excel/PDF'],
+              ] as const
+            ).map(([Icon, judul, ket]) => (
+              <li key={judul} className="flex items-center gap-3 rounded-[16px] bg-primary-soft/60 p-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-primary">
+                  <Icon className="size-[18px] text-accent-soft" aria-hidden="true" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-px">
+                  <span className="text-[13.5px] font-semibold text-bg">{judul}</span>
+                  <span className="truncate text-[12.5px] text-accent-soft">{ket}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-
       {/* Form: mobile pen Content pad [0,28,32,28] gap 28 justify center */}
       <div className="flex w-full flex-1 flex-col justify-center px-7 pb-8 pt-10 md:items-center md:px-6 md:py-10">
-        <div className="flex w-full flex-col gap-7 md:max-w-sm md:rounded-card md:border md:border-line-soft md:bg-surface md:p-6">
+        <div className="flex w-full flex-col gap-7 md:max-w-[420px] md:rounded-[24px] md:border md:border-line-soft md:bg-surface md:p-8">
           {/* Blok Brand (pen gap 14) */}
           <div className="flex flex-col gap-3.5">
             <div className="flex size-14 items-center justify-center rounded-[16px] bg-primary md:hidden">

@@ -42,7 +42,7 @@ export function PeriodFilter({
         <CalendarDays className="size-[18px] shrink-0 text-primary-soft" aria-hidden="true" />
         <span className="flex min-w-0 flex-1 flex-col gap-px">
           <span
-            className={cn('font-semibold text-muted', compact ? 'text-[10.5px]' : 'text-[11.5px]')}
+            className={cn('font-semibold text-muted', compact ? 'text-[10.5px] md:text-xs' : 'text-[11.5px]')}
           >
             {label}
           </span>
@@ -163,8 +163,8 @@ export function ExportSheet({
                   <span className="text-[13.5px] font-semibold text-primary">
                     {busy === o.format ? 'Menyiapkan file…' : o.judul}
                   </span>
-                  <span className="text-[11px] text-muted">{o.ket}</span>
-                  <span className="truncate text-[9px] text-muted">
+                  <span className="text-[11px] text-muted md:text-xs">{o.ket}</span>
+                  <span className="truncate text-[9px] text-muted md:text-[11.5px]">
                     {filePrefix}_{range.startDate}_{range.endDate}.{o.format}
                   </span>
                 </span>

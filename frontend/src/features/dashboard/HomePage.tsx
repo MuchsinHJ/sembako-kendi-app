@@ -1,10 +1,12 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { ChartColumn, ChevronRight, LogOut, Plus, TriangleAlert } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChartColumn, ChevronRight, LogOut, TriangleAlert } from 'lucide-react';
 import { useDashboardSummary } from './api';
 import { useLogout } from '@/features/auth/api';
 import { useAuth } from '@/features/auth/useAuth';
 import { useDebts } from '@/features/transactions/api';
 import { useMediaQuery } from '@/lib/useMediaQuery';
+import { MQ } from '@/lib/breakpoints';
+import { HomeWide } from './HomeWide';
 import { formatRupiah } from '@/lib/money';
 import { formatTanggalPanjang } from '@/lib/date';
 
@@ -24,14 +26,26 @@ function sapaan(jam: number): string {
  * Tag "[Data Contoh]" di canvas adalah anotasi prototipe, tidak dibawa ke data asli.
  */
 export function HomePage() {
-  const navigate = useNavigate();
   const { setAuthenticated } = useAuth();
   const logout = useLogout(() => setAuthenticated(null));
   const { data, isLoading, isError, refetch } = useDashboardSummary();
   const debts = useDebts();
   const jumlahUtang = debts.data?.pages[0]?.pagination.total;
-  const isMd = useMediaQuery('(min-width: 768px)');
+  const isMd = useMediaQuery(MQ.md);
   const now = new Date();
+
+  if (isMd) {
+    return (
+      <HomeWide
+        data={data}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        sapaan={sapaan(now.getHours())}
+        jumlahUtang={jumlahUtang}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -41,20 +55,8 @@ export function HomePage() {
           KENDI&apos;S MARKET
         </span>
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold leading-tight text-primary">
-            {isMd ? `${sapaan(now.getHours())}, Kendi` : 'Beranda'}
-          </h1>
+          <h1 className="text-2xl font-bold leading-tight text-primary">Beranda</h1>
           <div className="flex items-center gap-2">
-            {isMd && (
-              <button
-                type="button"
-                onClick={() => navigate('/transaksi')}
-                className="press-scale inline-flex h-11 items-center gap-2 rounded-full bg-primary ps-4 pe-5 text-sm font-semibold text-bg transition-colors duration-150 ease-out hover:bg-primary-soft"
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                Transaksi Baru
-              </button>
-            )}
             <button
               type="button"
               aria-label="Keluar"

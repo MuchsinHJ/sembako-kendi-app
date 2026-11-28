@@ -146,3 +146,17 @@ export function totalKeranjang(cart: CartItem[]): number {
   return cart.reduce((s, i) => s + Number(i.product.hargaJual) * i.qty, 0);
 }
 
+/**
+ * Saran nominal uang tunai di atas total (chip cepat POS md+): dibulatkan ke atas
+ * pada pecahan 5rb/10rb/50rb/100rb, unik, maksimal 3. Contoh total 72.500 →
+ * [75.000, 80.000, 100.000].
+ */
+export function saranUangTunai(total: number): number[] {
+  if (total <= 0) return [];
+  const out = new Set<number>();
+  for (const step of [5_000, 10_000, 50_000, 100_000]) {
+    const v = Math.ceil(total / step) * step;
+    if (v > total) out.add(v);
+  }
+  return [...out].sort((a, b) => a - b).slice(0, 3);
+}

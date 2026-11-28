@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -25,6 +25,9 @@ import { formatRupiah } from '@/lib/money';
 import { ApiError } from '@/lib/http';
 import { cn } from '@/lib/cn';
 import { labelKategoriTipe } from './kategori';
+import { MQ } from '@/lib/breakpoints';
+import { useMediaQuery } from '@/lib/useMediaQuery';
+import { MovementHistory } from '@/features/consignors/components/MovementHistory';
 
 /** Baris rincian (pen Rincian …): label 12.5 muted · nilai 13/600 primary. */
 function RincianRow({ label, value }: { label: string; value: ReactNode }) {
@@ -44,6 +47,7 @@ export function DetailProdukPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const { data: product, isLoading, isError, refetch } = useProduct(id);
+  const isMd = useMediaQuery(MQ.md);
 
   const [editOpen, setEditOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -115,6 +119,112 @@ export function DetailProdukPage() {
     });
   }
 
+  const overlays = (
+    <>
+      <ProductFormModal
+        key={`${p.id}-${p.updatedAt}`}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        initial={p}
+      />
+      <StockAdjustModal open={adjustOpen} onClose={() => setAdjustOpen(false)} product={p} />
+      {isTitipan && p.consignor && (
+        <MovementModal
+          key={movement ?? 'none'}
+          open={movement !== null}
+          tipe={movement ?? 'TERIMA'}
+          product={p}
+          consignorNama={p.consignor.nama}
+          onClose={() => {
+            setMovement(null);
+            refetch();
+          }}
+        />
+      )}
+
+      {/* Dialog Konfirmasi Nonaktifkan Produk (pen kHwod) */}
+      <ConfirmDialog
+        open={nonaktifOpen}
+        onClose={() => setNonaktifOpen(false)}
+        title="Nonaktifkan produk ini?"
+        chip={<DialogChip>{p.nama}</DialogChip>}
+        description={
+          <>
+            Produk tidak lagi tersedia untuk transaksi baru. Riwayat transaksi dan laporan lama
+            tetap tersimpan.
+            {isTitipan && ' Produk titipan hanya dapat dinonaktifkan jika stoknya 0.'}
+          </>
+        }
+        actions={
+          <>
+            <Button variant="secondary" className="w-full" onClick={() => setNonaktifOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              className="w-full"
+              onClick={deactivate}
+              disabled={updateStatus.isPending}
+            >
+              <PowerOff className="size-4" aria-hidden="true" />
+              {updateStatus.isPending ? 'Menyimpan…' : 'Nonaktifkan Produk'}
+            </Button>
+          </>
+        }
+      />
+
+      <ConfirmDialog
+        open={hapusOpen}
+        onClose={() => setHapusOpen(false)}
+        title="Hapus produk ini?"
+        chip={<DialogChip>{p.nama}</DialogChip>}
+        description="Produk akan dihapus permanen. Hapus hanya diizinkan bila produk belum pernah dipakai dalam transaksi."
+        actions={
+          <>
+            <Button variant="secondary" className="w-full" onClick={() => setHapusOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              className="w-full"
+              onClick={hapus}
+              disabled={deleteProduct.isPending}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+              {deleteProduct.isPending ? 'Menghapus…' : 'Hapus Produk'}
+            </Button>
+          </>
+        }
+      />
+
+      {/* 422 PRODUCT_HAS_TRANSACTION (BR-12/BR-26) → tawarkan Nonaktifkan */}
+      <ConfirmDialog
+        open={hasTransaction}
+        onClose={() => setHasTransaction(false)}
+        title="Produk tidak dapat dihapus"
+        description="Produk ini sudah memiliki riwayat transaksi. Hapus permanen tidak diizinkan — nonaktifkan produk agar tidak muncul dalam transaksi baru."
+        actions={
+          <>
+            <Button variant="secondary" className="w-full" onClick={() => setHasTransaction(false)}>
+              Tutup
+            </Button>
+            {!nonaktif && (
+              <Button
+                variant="danger"
+                className="w-full"
+                onClick={deactivate}
+                disabled={updateStatus.isPending}
+              >
+                <PowerOff className="size-4" aria-hidden="true" />
+                Nonaktifkan Produk
+              </Button>
+            )}
+          </>
+        }
+      />
+    </>
+  );
+
   /* Subflow / Produk Berhasil Dinonaktifkan (pen bCJpv): ikon 72, judul 20/700, chip nama, catatan, CTA */
   if (berhasilNonaktif) {
     return (
@@ -139,6 +249,235 @@ export function DetailProdukPage() {
           <ArrowLeft className="size-4" aria-hidden="true" />
           Kembali ke Katalog Produk
         </Button>
+      </div>
+    );
+  }
+
+  /*
+   * md+ (canvas fVXIu / saaqI, ditingkatkan): kolom kiri foto + identitas, kolom kanan
+   * kartu angka sebaris (harga, modal, margin, stok) · aksi berkelompok · riwayat pergerakan
+   * titipan (pen hNO05 diadopsi sebagai panel). Tombol Edit di header.
+   */
+  if (isMd) {
+    const margin = Number(p.hargaJual) - Number(p.hargaModal);
+    const menipis = p.stok <= p.stokMinimum;
+    return (
+      <div className="flex flex-col gap-4">
+        <ScreenHeader
+          onBack={() => navigate('/produk')}
+          eyebrow="DETAIL PRODUK"
+          title={p.nama}
+          subtitle={isTitipan ? labelKategoriTipe(p) : p.kategori}
+          action={
+            <Button className="h-11 shrink-0 ps-4 pe-5" onClick={() => setEditOpen(true)}>
+              <Pencil className="size-4" aria-hidden="true" />
+              Edit Produk
+            </Button>
+          }
+        />
+        <div className="grid items-start gap-5 md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="flex flex-col gap-3">
+            <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-[20px] bg-surface-muted">
+              {p.fotoUrl ? (
+                <img
+                  src={p.fotoUrl}
+                  alt={`Foto ${p.nama}`}
+                  className={cn(
+                    'size-full object-cover outline outline-1 -outline-offset-1 outline-black/10',
+                    nonaktif && 'opacity-60',
+                  )}
+                />
+              ) : (
+                <Package
+                  className={cn('size-16', nonaktif ? 'text-muted' : 'text-primary-soft')}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            <div className="flex flex-col gap-2.5 rounded-[16px] border border-line-soft bg-surface p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12.5px] text-muted">Status</span>
+                <Badge
+                  variant={nonaktif ? 'netral' : 'lunas'}
+                  label={nonaktif ? 'Nonaktif' : 'Aktif'}
+                />
+              </div>
+              <div className="h-px bg-line-soft" />
+              <RincianRow label="Kategori" value={p.kategori} />
+              <div className="h-px bg-line-soft" />
+              <RincianRow label="Tipe" value={isTitipan ? 'Titipan' : 'Milik sendiri'} />
+              {isTitipan && p.consignor && (
+                <>
+                  <div className="h-px bg-line-soft" />
+                  <RincianRow
+                    label="Penitip"
+                    value={
+                      <Link
+                        to={`/penitip/${p.consignor.id}`}
+                        className="text-primary-soft hover:underline"
+                      >
+                        {p.consignor.nama}
+                      </Link>
+                    }
+                  />
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              {(
+                [
+                  ['Harga jual', formatRupiah(p.hargaJual), 'Per unit', 'dark'],
+                  [
+                    isTitipan ? 'Harga setor' : 'Harga modal',
+                    formatRupiah(p.hargaModal),
+                    isTitipan ? 'Ke penitip' : 'Per unit',
+                    'surface',
+                  ],
+                  [
+                    'Margin',
+                    formatRupiah(margin),
+                    Number(p.hargaJual) > 0
+                      ? `${Math.round((margin / Number(p.hargaJual)) * 100)}% dari harga jual`
+                      : '–',
+                    'surface',
+                  ],
+                  [
+                    'Stok saat ini',
+                    String(p.stok),
+                    `Minimum ${p.stokMinimum}`,
+                    menipis && !nonaktif ? 'warning' : 'surface',
+                  ],
+                ] as const
+              ).map(([label, value, hint, tone]) => (
+                <div
+                  key={label}
+                  className={cn(
+                    'flex min-w-0 flex-col gap-1 rounded-[18px] p-4',
+                    tone === 'dark' && (nonaktif ? 'bg-muted-soft' : 'bg-primary'),
+                    tone === 'warning' && 'bg-warning-soft',
+                    tone === 'surface' && 'border border-line-soft bg-surface',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'text-[12.5px] font-medium',
+                      tone === 'dark' && !nonaktif
+                        ? 'text-accent-soft'
+                        : tone === 'warning'
+                          ? 'text-warning'
+                          : 'text-muted',
+                    )}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    className={cn(
+                      'truncate text-[24px] font-bold leading-tight tabular-nums',
+                      tone === 'dark' && !nonaktif
+                        ? 'text-bg'
+                        : nonaktif
+                          ? 'text-muted'
+                          : 'text-primary',
+                    )}
+                  >
+                    {value}
+                  </span>
+                  <span
+                    className={cn(
+                      'truncate text-xs',
+                      tone === 'dark' && !nonaktif ? 'text-accent-soft' : 'text-muted',
+                    )}
+                  >
+                    {hint}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {actionMsg && (
+              <p
+                role="status"
+                className="rounded-[12px] bg-warning-soft px-3 py-2.5 text-[12.5px] font-medium text-warning"
+              >
+                {actionMsg}
+              </p>
+            )}
+
+            <section
+              aria-label="Kelola produk"
+              className="flex flex-col gap-3 rounded-[20px] border border-line-soft bg-surface p-4"
+            >
+              <h2 className="text-[15px] font-bold text-primary">Kelola stok &amp; status</h2>
+              {nonaktif ? (
+                <div className="flex items-start gap-2 rounded-[12px] bg-surface-muted px-3 py-2.5">
+                  <Info className="mt-px size-4 shrink-0 text-muted" aria-hidden="true" />
+                  <p className="text-[12.5px] text-muted">
+                    Produk ini sudah nonaktif. Aktifkan kembali lewat Edit Produk bila ingin dijual
+                    lagi.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-2.5 lg:grid-cols-2">
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => setAdjustOpen(true)}
+                  >
+                    <ArrowUpDown className="size-4" aria-hidden="true" />
+                    Sesuaikan Stok
+                  </Button>
+                  {isTitipan && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() => setMovement('TERIMA')}
+                      >
+                        <PackagePlus className="size-4" aria-hidden="true" />
+                        Terima Titipan
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() => setMovement('RETUR')}
+                      >
+                        <PackageMinus className="size-4" aria-hidden="true" />
+                        Retur ke Penitip
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => setNonaktifOpen(true)}
+                  >
+                    <PowerOff className="size-4" aria-hidden="true" />
+                    Nonaktifkan Produk
+                  </Button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft pt-2">
+                <p className="text-xs text-muted">
+                  Hapus permanen hanya untuk produk yang belum pernah dipakai di transaksi.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setHapusOpen(true)}
+                  className="press-scale inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[12.5px] font-semibold text-danger transition-colors duration-150 ease-out hover:bg-danger/10"
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  Hapus Produk
+                </button>
+              </div>
+            </section>
+
+            {isTitipan && <MovementHistory scope={{ productId: p.id }} />}
+          </div>
+        </div>
+        {overlays}
       </div>
     );
   }
@@ -302,107 +641,7 @@ export function DetailProdukPage() {
         </div>
       </div>
 
-      <ProductFormModal
-        key={`${p.id}-${p.updatedAt}`}
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        initial={p}
-      />
-      <StockAdjustModal open={adjustOpen} onClose={() => setAdjustOpen(false)} product={p} />
-      {isTitipan && p.consignor && (
-        <MovementModal
-          key={movement ?? 'none'}
-          open={movement !== null}
-          tipe={movement ?? 'TERIMA'}
-          product={p}
-          consignorNama={p.consignor.nama}
-          onClose={() => {
-            setMovement(null);
-            refetch();
-          }}
-        />
-      )}
-
-      {/* Dialog Konfirmasi Nonaktifkan Produk (pen kHwod) */}
-      <ConfirmDialog
-        open={nonaktifOpen}
-        onClose={() => setNonaktifOpen(false)}
-        title="Nonaktifkan produk ini?"
-        chip={<DialogChip>{p.nama}</DialogChip>}
-        description={
-          <>
-            Produk tidak lagi tersedia untuk transaksi baru. Riwayat transaksi dan laporan lama
-            tetap tersimpan.
-            {isTitipan && ' Produk titipan hanya dapat dinonaktifkan jika stoknya 0.'}
-          </>
-        }
-        actions={
-          <>
-            <Button variant="secondary" className="w-full" onClick={() => setNonaktifOpen(false)}>
-              Batal
-            </Button>
-            <Button
-              variant="danger"
-              className="w-full"
-              onClick={deactivate}
-              disabled={updateStatus.isPending}
-            >
-              <PowerOff className="size-4" aria-hidden="true" />
-              {updateStatus.isPending ? 'Menyimpan…' : 'Nonaktifkan Produk'}
-            </Button>
-          </>
-        }
-      />
-
-      <ConfirmDialog
-        open={hapusOpen}
-        onClose={() => setHapusOpen(false)}
-        title="Hapus produk ini?"
-        chip={<DialogChip>{p.nama}</DialogChip>}
-        description="Produk akan dihapus permanen. Hapus hanya diizinkan bila produk belum pernah dipakai dalam transaksi."
-        actions={
-          <>
-            <Button variant="secondary" className="w-full" onClick={() => setHapusOpen(false)}>
-              Batal
-            </Button>
-            <Button
-              variant="danger"
-              className="w-full"
-              onClick={hapus}
-              disabled={deleteProduct.isPending}
-            >
-              <Trash2 className="size-4" aria-hidden="true" />
-              {deleteProduct.isPending ? 'Menghapus…' : 'Hapus Produk'}
-            </Button>
-          </>
-        }
-      />
-
-      {/* 422 PRODUCT_HAS_TRANSACTION (BR-12/BR-26) → tawarkan Nonaktifkan */}
-      <ConfirmDialog
-        open={hasTransaction}
-        onClose={() => setHasTransaction(false)}
-        title="Produk tidak dapat dihapus"
-        description="Produk ini sudah memiliki riwayat transaksi. Hapus permanen tidak diizinkan — nonaktifkan produk agar tidak muncul dalam transaksi baru."
-        actions={
-          <>
-            <Button variant="secondary" className="w-full" onClick={() => setHasTransaction(false)}>
-              Tutup
-            </Button>
-            {!nonaktif && (
-              <Button
-                variant="danger"
-                className="w-full"
-                onClick={deactivate}
-                disabled={updateStatus.isPending}
-              >
-                <PowerOff className="size-4" aria-hidden="true" />
-                Nonaktifkan Produk
-              </Button>
-            )}
-          </>
-        }
-      />
+      {overlays}
     </div>
   );
 }
